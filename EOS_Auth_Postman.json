@@ -1,0 +1,119 @@
+{
+  "info": {
+    "name": "EOS Backend – Auth Tests",
+    "_postman_id": "eos-auth-collection-v1",
+    "description": "Test JWT login and role-based access for all 16 roles.\n\nPassword for all test accounts: **EOS@test123**\n\nWorkflow:\n1. Run any Login request → the token is auto-saved to {{token}}\n2. Use GET /auth/me or any protected route — it reads {{token}} automatically",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000/api/v1", "type": "string" },
+    { "key": "token",    "value": "",                              "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "🔐 Auth",
+      "item": [
+        {
+          "name": "Login as ADMIN",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Login successful', () => pm.response.to.have.status(200));", "  pm.test('Token received',   () => pm.expect(body.data.accessToken).to.be.a('string'));", "  pm.test('Role is admin',    () => pm.expect(body.data.user.role).to.eql('admin'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as HOD",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Login successful', () => pm.response.to.have.status(200));", "  pm.test('Role is hod',      () => pm.expect(body.data.user.role).to.eql('hod'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"hod@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as FACULTY",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Login successful', () => pm.response.to.have.status(200));", "  pm.test('Role is faculty',  () => pm.expect(body.data.user.role).to.eql('faculty'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"faculty@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as STUDENT",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Login successful', () => pm.response.to.have.status(200));", "  pm.test('Role is student',  () => pm.expect(body.data.user.role).to.eql('student'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"student@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as PARENT",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Role is parent',   () => pm.expect(body.data.user.role).to.eql('parent'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"parent@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as COE",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Role is coe', () => pm.expect(body.data.user.role).to.eql('coe'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"coe@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as PLACEMENT",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Role is placement', () => pm.expect(body.data.user.role).to.eql('placement'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"placement@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as LIBRARY",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Role is library', () => pm.expect(body.data.user.role).to.eql('library'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"library@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as BILLING",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Role is billing', () => pm.expect(body.data.user.role).to.eql('billing'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"billing@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as HR_PAYROLL",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Role is hr_payroll', () => pm.expect(body.data.user.role).to.eql('hr_payroll'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"hr_payroll@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as FINANCE",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Role is finance', () => pm.expect(body.data.user.role).to.eql('finance'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"finance@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as IQAC",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Role is iqac', () => pm.expect(body.data.user.role).to.eql('iqac'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"iqac@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as SECRETARY",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Role is secretary', () => pm.expect(body.data.user.role).to.eql('secretary'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"secretary@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as GATE_WARDEN",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Role is gate_warden', () => pm.expect(body.data.user.role).to.eql('gate_warden'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"gate_warden@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        },
+        {
+          "name": "Login as ACADEMIC_COORDINATOR",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.collectionVariables.set('token', body.data.accessToken);", "  pm.test('Role is academic_coordinator', () => pm.expect(body.data.user.role).to.eql('academic_coordinator'));", "}"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"academic_coordinator@eos.test\",\n  \"password\": \"EOS@test123\"\n}" } }
+        }
+      ]
+    },
+    {
+      "name": "🛡 Protected Routes",
+      "item": [
+        {
+          "name": "GET /auth/me  (uses saved token)",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "pm.test('Has user data', () => {", "  const body = pm.response.json();", "  pm.expect(body.success).to.be.true;", "  pm.expect(body.data.email).to.be.a('string');", "  pm.expect(body.data.roles.name).to.be.a('string');", "});"], "type": "text/javascript" }}],
+          "request": { "method": "GET", "url": "{{base_url}}/auth/me", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }] }
+        },
+        {
+          "name": "GET /auth/me  ❌ No Token (expect 401)",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 401', () => pm.response.to.have.status(401));", "pm.test('Rejected without token', () => pm.expect(pm.response.json().success).to.be.false);"], "type": "text/javascript" }}],
+          "request": { "method": "GET", "url": "{{base_url}}/auth/me", "header": [] }
+        },
+        {
+          "name": "POST /auth/login  ❌ Wrong password (expect 401)",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 401', () => pm.response.to.have.status(401));"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@eos.test\",\n  \"password\": \"wrongpassword\"\n}" } }
+        },
+        {
+          "name": "POST /auth/login  ❌ Invalid email format (expect 400)",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 400', () => pm.response.to.have.status(400));"], "type": "text/javascript" }}],
+          "request": { "method": "POST", "url": "{{base_url}}/auth/login", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"EOS@test123\"\n}" } }
+        }
+      ]
+    }
+  ]
+}
