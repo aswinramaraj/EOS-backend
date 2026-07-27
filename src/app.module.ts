@@ -53,15 +53,18 @@ import { VendorsModule } from './modules/procurement/vendors/vendors.module';
 import { VenuesModule } from './modules/venues/venues/venues.module';
 import { NotificationsModule } from './modules/notifications/notifications/notifications.module';
 import { FeedbackModule } from './modules/feedback/feedback/feedback.module';
+import { BookCategoriesModule } from './modules/library/book-categories/book-categories.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
+    PrismaModule,
     // ── Rate limiting (global) ──────────────────────────────────────────────
     // Default: 100 requests per 60 seconds per IP
     // Login endpoint overrides this to 5 attempts per 60 seconds (see AuthController)
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
 
-    AuthModule, AcademicCalendarModule, BatchesModule, CoursesModule, ClassesModule, DepartmentsModule, SubjectsModule, BonafideModule, CertificatesModule, OdModule, SoaApplicationsModule, StudentLeavesModule, StudentsModule, AnnouncementsModule, ExamsModule, ExamTypesModule, HallPlansModule, InvigilationModule, MarksModule, ResultsModule, RevaluationModule, AppraisalModule, AttendanceModule, FacultyLeavesModule, FacultyMappingModule, FacultyModule, HrPayrollModule, LessonPlansModule, LmsNotesModule, MediaRequestsModule, TimetableModule, BillingModule, EducationLoanModule, FeeStructureModule, GateLedgerModule, HostelModule, TransportModule, BooksModule, BorrowRecordsModule, EResourcesModule, CompaniesModule, DrivesModule, StudentProfilesModule, GrnModule, PurchaseOrdersModule, ServiceOrdersModule, VendorsModule, VenuesModule, NotificationsModule, FeedbackModule,
+    AuthModule, AcademicCalendarModule, BatchesModule, CoursesModule, ClassesModule, DepartmentsModule, SubjectsModule, BonafideModule, CertificatesModule, OdModule, SoaApplicationsModule, StudentLeavesModule, StudentsModule, AnnouncementsModule, ExamsModule, ExamTypesModule, HallPlansModule, InvigilationModule, MarksModule, ResultsModule, RevaluationModule, AppraisalModule, AttendanceModule, FacultyLeavesModule, FacultyMappingModule, FacultyModule, HrPayrollModule, LessonPlansModule, LmsNotesModule, MediaRequestsModule, TimetableModule, BillingModule, EducationLoanModule, FeeStructureModule, GateLedgerModule, HostelModule, TransportModule, BooksModule, BorrowRecordsModule, EResourcesModule, CompaniesModule, DrivesModule, StudentProfilesModule, GrnModule, PurchaseOrdersModule, ServiceOrdersModule, VendorsModule, VenuesModule, NotificationsModule, FeedbackModule, BookCategoriesModule,
   ],
   controllers: [AppController],
   providers: [
