@@ -7,6 +7,15 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateBookCategoryDto } from './dto/create-book-category.dto';
 import { UpdateBookCategoryDto } from './dto/update-book-category.dto';
 
+// Minimum trigram/word similarity score for a row to count as a fuzzy match.
+const FUZZY_SIMILARITY_THRESHOLD = 0.2;
+
+interface CategoryFuzzySearchRow {
+  id: number;
+  name: string;
+  similarity: number;
+}
+
 @Injectable()
 export class BookCategoriesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -45,6 +54,40 @@ export class BookCategoriesService {
     return {
       success: true,
       data: categories,
+    };
+  }
+
+  /**
+   * Typo-tolerant search over category name using pg_trgm's similarity()
+   * and word_similarity() (see BooksService.searchFuzzy for the rationale).
+   */
+  async searchFuzzy(query: string, limit = 20) {
+    const q = query.trim();
+    const cappedLimit = Math.min(limit ?? 20, 20);
+
+    const rows = await this.prisma.$queryRaw<CategoryFuzzySearchRow[]>`
+      SELECT
+        id,
+        name,
+        GREATEST(
+          similarity(name, ${q}),
+          word_similarity(${q}, name)
+        ) AS similarity
+      FROM book_categories
+      WHERE
+        similarity(name, ${q}) > ${FUZZY_SIMILARITY_THRESHOLD}
+        OR word_similarity(${q}, name) > ${FUZZY_SIMILARITY_THRESHOLD}
+      ORDER BY similarity DESC
+      LIMIT ${cappedLimit}
+    `;
+
+    return {
+      success: true,
+      data: rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        similarity: Number(row.similarity),
+      })),
     };
   }
 

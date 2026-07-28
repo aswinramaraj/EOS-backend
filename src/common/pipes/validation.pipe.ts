@@ -23,7 +23,7 @@ export const globalValidationPipe = new ValidationPipe({
     );
 
     return new BadRequestException({
-      message:   messages.length === 1 ? messages[0] : messages,
+      message: messages.length === 1 ? messages[0] : messages,
       errorCode: 'VALIDATION_ERROR',
     });
   },

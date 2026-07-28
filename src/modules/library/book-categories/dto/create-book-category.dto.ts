@@ -7,7 +7,7 @@ export class CreateBookCategoryDto {
     example: 'Computer Science',
     description: 'Library book category',
   })
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }: { value: string }) => value?.trim())
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)

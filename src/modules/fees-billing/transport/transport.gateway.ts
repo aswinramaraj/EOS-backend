@@ -1,4 +1,8 @@
-import { WebSocketGateway, SubscribeMessage, MessageBody } from '@nestjs/websockets';
+import {
+  WebSocketGateway,
+  SubscribeMessage,
+  MessageBody,
+} from '@nestjs/websockets';
 import { TransportService } from './transport.service';
 import { CreateTransportDto } from './dto/create-transport.dto';
 import { UpdateTransportDto } from './dto/update-transport.dto';
@@ -24,7 +28,10 @@ export class TransportGateway {
 
   @SubscribeMessage('updateTransport')
   update(@MessageBody() updateTransportDto: UpdateTransportDto) {
-    return this.transportService.update(updateTransportDto.id, updateTransportDto);
+    return this.transportService.update(
+      updateTransportDto.id,
+      updateTransportDto,
+    );
   }
 
   @SubscribeMessage('removeTransport')

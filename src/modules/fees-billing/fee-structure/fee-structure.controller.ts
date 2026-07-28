@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { FeeStructureService } from './fee-structure.service';
 import { CreateFeeStructureDto } from './dto/create-fee-structure.dto';
 import { UpdateFeeStructureDto } from './dto/update-fee-structure.dto';
@@ -23,7 +31,10 @@ export class FeeStructureController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateFeeStructureDto: UpdateFeeStructureDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateFeeStructureDto: UpdateFeeStructureDto,
+  ) {
     return this.feeStructureService.update(+id, updateFeeStructureDto);
   }
 

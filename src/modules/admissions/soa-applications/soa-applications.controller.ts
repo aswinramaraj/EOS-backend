@@ -1,11 +1,21 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { SoaApplicationsService } from './soa-applications.service';
 import { CreateSoaApplicationDto } from './dto/create-soa-application.dto';
 import { UpdateSoaApplicationDto } from './dto/update-soa-application.dto';
 
 @Controller('soa-applications')
 export class SoaApplicationsController {
-  constructor(private readonly soaApplicationsService: SoaApplicationsService) {}
+  constructor(
+    private readonly soaApplicationsService: SoaApplicationsService,
+  ) {}
 
   @Post()
   create(@Body() createSoaApplicationDto: CreateSoaApplicationDto) {
@@ -23,7 +33,10 @@ export class SoaApplicationsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateSoaApplicationDto: UpdateSoaApplicationDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateSoaApplicationDto: UpdateSoaApplicationDto,
+  ) {
     return this.soaApplicationsService.update(+id, updateSoaApplicationDto);
   }
 

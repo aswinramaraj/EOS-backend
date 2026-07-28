@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { FacultyMappingService } from './faculty-mapping.service';
 import { CreateFacultyMappingDto } from './dto/create-faculty-mapping.dto';
 import { UpdateFacultyMappingDto } from './dto/update-faculty-mapping.dto';
@@ -23,7 +31,10 @@ export class FacultyMappingController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateFacultyMappingDto: UpdateFacultyMappingDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateFacultyMappingDto: UpdateFacultyMappingDto,
+  ) {
     return this.facultyMappingService.update(+id, updateFacultyMappingDto);
   }
 

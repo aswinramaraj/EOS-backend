@@ -5,7 +5,9 @@ import type { JwtPayload } from '../interfaces/jwt-payload.interface';
 
 // passport-jwt is a CJS package — load safely in ESM context
 const _require = createRequire(import.meta.url);
-const { Strategy, ExtractJwt } = _require('passport-jwt') as typeof import('passport-jwt');
+const { Strategy, ExtractJwt } = _require(
+  'passport-jwt',
+) as typeof import('passport-jwt');
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {

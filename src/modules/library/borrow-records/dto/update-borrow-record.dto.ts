@@ -1,4 +1,19 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateBorrowRecordDto } from './create-borrow-record.dto';
+import { IsDateString, IsEnum, IsOptional } from 'class-validator';
 
-export class UpdateBorrowRecordDto extends PartialType(CreateBorrowRecordDto) {}
+export enum BorrowRecordAction {
+  return = 'return',
+  renew = 'renew',
+}
+
+export class UpdateBorrowRecordDto {
+  @IsEnum(BorrowRecordAction)
+  action: BorrowRecordAction;
+
+  @IsOptional()
+  @IsDateString()
+  return_date?: string;
+
+  @IsOptional()
+  @IsDateString()
+  new_due_date?: string;
+}

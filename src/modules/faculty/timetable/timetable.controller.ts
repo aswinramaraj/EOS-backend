@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { TimetableService } from './timetable.service';
 import { CreateTimetableDto } from './dto/create-timetable.dto';
 import { UpdateTimetableDto } from './dto/update-timetable.dto';
@@ -23,7 +31,10 @@ export class TimetableController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateTimetableDto: UpdateTimetableDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateTimetableDto: UpdateTimetableDto,
+  ) {
     return this.timetableService.update(+id, updateTimetableDto);
   }
 

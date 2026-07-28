@@ -11,7 +11,9 @@ describe('SoaApplicationsController', () => {
       providers: [SoaApplicationsService],
     }).compile();
 
-    controller = module.get<SoaApplicationsController>(SoaApplicationsController);
+    controller = module.get<SoaApplicationsController>(
+      SoaApplicationsController,
+    );
   });
 
   it('should be defined', () => {

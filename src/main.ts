@@ -28,7 +28,10 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // ── Global interceptors ──────────────────────────────────────────────────────
-  app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(),
+    new TransformInterceptor(),
+  );
 
   // ── Start ────────────────────────────────────────────────────────────────────
   const port = parseInt(process.env.PORT || '3000', 10);

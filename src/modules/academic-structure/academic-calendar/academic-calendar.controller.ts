@@ -1,11 +1,21 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { AcademicCalendarService } from './academic-calendar.service';
 import { CreateAcademicCalendarDto } from './dto/create-academic-calendar.dto';
 import { UpdateAcademicCalendarDto } from './dto/update-academic-calendar.dto';
 
 @Controller('academic-calendar')
 export class AcademicCalendarController {
-  constructor(private readonly academicCalendarService: AcademicCalendarService) {}
+  constructor(
+    private readonly academicCalendarService: AcademicCalendarService,
+  ) {}
 
   @Post()
   create(@Body() createAcademicCalendarDto: CreateAcademicCalendarDto) {
@@ -23,7 +33,10 @@ export class AcademicCalendarController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateAcademicCalendarDto: UpdateAcademicCalendarDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateAcademicCalendarDto: UpdateAcademicCalendarDto,
+  ) {
     return this.academicCalendarService.update(+id, updateAcademicCalendarDto);
   }
 
