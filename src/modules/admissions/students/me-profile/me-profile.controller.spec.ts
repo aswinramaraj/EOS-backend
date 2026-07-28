@@ -5,6 +5,7 @@ import { ROLES_KEY } from 'src/auth/decorators/roles.decorator';
 import { MeController } from './me-profile.controller';
 import { MeProfileService } from './me-profile.service';
 import { MeAttendanceService } from './me-attendance.service';
+import { MeLeavesService } from './me-leaves.service';
 
 describe('MeController', () => {
   let controller: MeController;
@@ -15,6 +16,9 @@ describe('MeController', () => {
   const meAttendanceService = {
     getMyAttendance: jest.fn(),
   };
+  const meLeavesService = {
+    createLeave: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -22,6 +26,7 @@ describe('MeController', () => {
       providers: [
         { provide: MeProfileService, useValue: meProfileService },
         { provide: MeAttendanceService, useValue: meAttendanceService },
+        { provide: MeLeavesService, useValue: meLeavesService },
       ],
     }).compile();
 
@@ -82,5 +87,26 @@ describe('MeController', () => {
     );
 
     expect(meAttendanceService.getMyAttendance).toHaveBeenCalledWith(7, dto);
+  });
+
+  it('restricts createLeave() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const roles = reflector.get<string[]>(ROLES_KEY, controller.createLeave);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates createLeave() to MeLeavesService', () => {
+    const dto = {
+      from_date: '2099-08-01',
+      to_date: '2099-08-03',
+      reason: 'Family function',
+    };
+    void controller.createLeave(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      dto,
+    );
+
+    expect(meLeavesService.createLeave).toHaveBeenCalledWith(7, dto);
   });
 });

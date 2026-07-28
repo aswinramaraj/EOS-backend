@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -7,14 +15,17 @@ import type { JwtPayload } from 'src/auth/interfaces/jwt-payload.interface';
 import { ROLES } from 'src/common/constants/roles.constant';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { GetAttendanceDto } from './dto/get-attendance.dto';
+import { CreateLeaveDto } from './dto/create-leave.dto';
 import { MeProfileService } from './me-profile.service';
 import { MeAttendanceService } from './me-attendance.service';
+import { MeLeavesService } from './me-leaves.service';
 
 @Controller('me')
 export class MeController {
   constructor(
     private readonly meProfileService: MeProfileService,
     private readonly meAttendanceService: MeAttendanceService,
+    private readonly meLeavesService: MeLeavesService,
   ) {}
 
   /**
@@ -89,5 +100,28 @@ export class MeController {
     @Query() dto: GetAttendanceDto,
   ) {
     return this.meAttendanceService.getMyAttendance(user.sub, dto);
+  }
+
+  /**
+   * POST /api/v1/me/leaves
+   *
+   * Self-scoped: student_id resolved from the JWT. Always starts the
+   * two-stage approval chain at status='pending', both approval columns
+   * null. Does not check for an assigned mentor or overlapping requests —
+   * both explicitly out of scope per todo.md/7-POST-me-leaves.md.
+   *
+   * Error responses:
+   *  400 VALIDATION_ERROR    – missing/malformed from_date/to_date
+   *  401 UNAUTHORIZED        – missing/invalid JWT
+   *  403 FORBIDDEN           – authenticated but not a student
+   *  404 STUDENT_NOT_FOUND   – authenticated user has no linked student record
+   *  422 INVALID_DATE_RANGE  – from_date in the past, or from_date > to_date
+   *  500 INTERNAL_ERROR      – unexpected server failure
+   */
+  @Post('leaves')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  createLeave(@CurrentUser() user: JwtPayload, @Body() dto: CreateLeaveDto) {
+    return this.meLeavesService.createLeave(user.sub, dto);
   }
 }
