@@ -1,0 +1,86 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { Reflector } from '@nestjs/core';
+import { ROLES } from 'src/common/constants/roles.constant';
+import { ROLES_KEY } from 'src/auth/decorators/roles.decorator';
+import { MeController } from './me-profile.controller';
+import { MeProfileService } from './me-profile.service';
+import { MeAttendanceService } from './me-attendance.service';
+
+describe('MeController', () => {
+  let controller: MeController;
+  const meProfileService = {
+    updateMyProfile: jest.fn(),
+    getMyProfile: jest.fn(),
+  };
+  const meAttendanceService = {
+    getMyAttendance: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [MeController],
+      providers: [
+        { provide: MeProfileService, useValue: meProfileService },
+        { provide: MeAttendanceService, useValue: meAttendanceService },
+      ],
+    }).compile();
+
+    controller = module.get<MeController>(MeController);
+  });
+
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
+  it('restricts updateProfile() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const roles = reflector.get<string[]>(ROLES_KEY, controller.updateProfile);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates to MeProfileService, never trusting a client-supplied id', () => {
+    const dto = { student_mobile: '9876500099' };
+    void controller.updateProfile(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      dto,
+    );
+
+    expect(meProfileService.updateMyProfile).toHaveBeenCalledWith(7, dto);
+  });
+
+  it('restricts getProfile() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const roles = reflector.get<string[]>(ROLES_KEY, controller.getProfile);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates getProfile() to MeProfileService', () => {
+    void controller.getProfile({
+      sub: 7,
+      email: 'a@b.com',
+      role: 'student',
+      roleId: 4,
+    });
+
+    expect(meProfileService.getMyProfile).toHaveBeenCalledWith(7);
+  });
+
+  it('restricts getAttendance() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const roles = reflector.get<string[]>(ROLES_KEY, controller.getAttendance);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates getAttendance() to MeAttendanceService', () => {
+    const dto = { from: '2026-07-01', to: '2026-07-31' };
+    void controller.getAttendance(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      dto,
+    );
+
+    expect(meAttendanceService.getMyAttendance).toHaveBeenCalledWith(7, dto);
+  });
+});
