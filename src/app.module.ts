@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -60,6 +61,11 @@ import { FeedbackModule } from './modules/feedback/feedback/feedback.module';
     // Default: 100 requests per 60 seconds per IP
     // Login endpoint overrides this to 5 attempts per 60 seconds (see AuthController)
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+
+    // ── Cron scheduling (global) ────────────────────────────────────────────
+    // Used by DrivesModule to auto-reveal undisclosed companies and post
+    // day-before drive announcements.
+    ScheduleModule.forRoot(),
 
     AuthModule, AcademicCalendarModule, BatchesModule, CoursesModule, ClassesModule, DepartmentsModule, SubjectsModule, BonafideModule, CertificatesModule, OdModule, SoaApplicationsModule, StudentLeavesModule, StudentsModule, AnnouncementsModule, ExamsModule, ExamTypesModule, HallPlansModule, InvigilationModule, MarksModule, ResultsModule, RevaluationModule, AppraisalModule, AttendanceModule, FacultyLeavesModule, FacultyMappingModule, FacultyModule, HrPayrollModule, LessonPlansModule, LmsNotesModule, MediaRequestsModule, TimetableModule, BillingModule, EducationLoanModule, FeeStructureModule, GateLedgerModule, HostelModule, TransportModule, BooksModule, BorrowRecordsModule, EResourcesModule, CompaniesModule, DrivesModule, StudentProfilesModule, GrnModule, PurchaseOrdersModule, ServiceOrdersModule, VendorsModule, VenuesModule, NotificationsModule, FeedbackModule,
   ],
