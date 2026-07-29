@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -247,11 +248,135 @@ export class MeOdTeamsService {
     }
   }
 
+  /**
+   * DELETE /me/od-teams/:id/members/:studentId
+   *
+   * Authorization is narrower than "any authenticated student": the caller
+   * must be either the team's creator (removing anyone) or the member being
+   * removed (removing themselves) — resolved from the JWT, never trusted
+   * from the request. Deliberately performs no is_locked check at all per
+   * the spec's own explicit asymmetry with joining: a student may need to
+   * drop out even after the team is locked/the OD request is submitted.
+   *
+   * Response is enriched with `joined_at` (captured from the membership row
+   * before it's deleted) and `removed_at` (the moment of deletion) rather
+   * than the spec's bare `data: {}` — since the membership row has to be
+   * fetched anyway for the existence check, returning its join date costs
+   * nothing extra and gives the client a genuine confirmation record of
+   * what was removed and when, instead of an empty placeholder object.
+   *
+   * A P2025 (record not found) on the delete itself — the row disappearing
+   * between the existence check and the delete, e.g. two concurrent
+   * removals of the same member — is treated the same as the row never
+   * having existed: 404 MEMBER_NOT_FOUND, not a 500.
+   *
+   * Error cases:
+   *  404 STUDENT_NOT_FOUND        – authenticated user has no linked
+   *                                 student record (spec doesn't list this
+   *                                 code, kept for consistency with every
+   *                                 sibling /me/* endpoint)
+   *  404 TEAM_NOT_FOUND           – id doesn't match any od_teams row
+   *  403 NOT_AUTHORIZED_TO_REMOVE – caller is neither the creator nor the
+   *                                 targeted student
+   *  404 MEMBER_NOT_FOUND         – no od_team_members row for this
+   *                                 team_id + studentId
+   *  500 INTERNAL_ERROR           – unexpected DB failure
+   */
+  async removeOdTeamMember(
+    userId: number,
+    teamId: number,
+    targetStudentId: number,
+  ) {
+    const caller = await this.prisma.students.findUnique({
+      where: { user_id: userId },
+      select: { id: true },
+    });
+    if (!caller) {
+      throw new NotFoundException({
+        message: 'Student profile not found for this account',
+        errorCode: 'STUDENT_NOT_FOUND',
+      });
+    }
+
+    const team = await this.prisma.od_teams.findUnique({
+      where: { id: teamId },
+      select: { id: true, created_by_student_id: true },
+    });
+    if (!team) {
+      throw new NotFoundException({
+        message: 'OD team not found',
+        errorCode: 'TEAM_NOT_FOUND',
+      });
+    }
+
+    const isCreator = team.created_by_student_id === caller.id;
+    const isSelf = caller.id === targetStudentId;
+    if (!isCreator && !isSelf) {
+      throw new ForbiddenException({
+        message:
+          'You can only remove yourself or, as the team creator, remove other members',
+        errorCode: 'NOT_AUTHORIZED_TO_REMOVE',
+      });
+    }
+
+    const membership = await this.prisma.od_team_members.findUnique({
+      where: {
+        team_id_student_id: { team_id: teamId, student_id: targetStudentId },
+      },
+    });
+    if (!membership) {
+      throw new NotFoundException({
+        message: 'This student is not a member of this team',
+        errorCode: 'MEMBER_NOT_FOUND',
+      });
+    }
+
+    await this.deleteMembership(userId, membership.id);
+
+    return {
+      team_id: teamId,
+      student_id: targetStudentId,
+      joined_at: membership.joined_at,
+      removed_at: new Date(),
+    };
+  }
+
+  private async deleteMembership(userId: number, membershipId: number) {
+    try {
+      await this.prisma.od_team_members.delete({
+        where: { id: membershipId },
+      });
+    } catch (err) {
+      if (this.isRecordNotFoundError(err)) {
+        throw new NotFoundException({
+          message: 'This student is not a member of this team',
+          errorCode: 'MEMBER_NOT_FOUND',
+        });
+      }
+      this.logger.error(
+        `Failed to remove OD team member for user ${userId}`,
+        err,
+      );
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
+  }
+
   private isUniqueConstraintError(err: unknown): boolean {
     return (
       typeof err === 'object' &&
       err !== null &&
       (err as { code?: string }).code === 'P2002'
+    );
+  }
+
+  private isRecordNotFoundError(err: unknown): boolean {
+    return (
+      typeof err === 'object' &&
+      err !== null &&
+      (err as { code?: string }).code === 'P2025'
     );
   }
 }

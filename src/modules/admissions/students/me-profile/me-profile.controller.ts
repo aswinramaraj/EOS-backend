@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
+  ParseIntPipe,
   Post,
   Put,
   Query,
@@ -204,5 +207,38 @@ export class MeController {
   @Roles(ROLES.STUDENT)
   joinOdTeam(@CurrentUser() user: JwtPayload, @Body() dto: JoinOdTeamDto) {
     return this.meOdTeamsService.joinOdTeam(user.sub, dto);
+  }
+
+  /**
+   * DELETE /api/v1/me/od-teams/:id/members/:student_id
+   *
+   * Authorization is narrower than the usual "any student" gate: resolved
+   * inside MeOdTeamsService as "caller is the team's creator, or caller is
+   * the targeted student themselves" — never trusted from the request.
+   * Deliberately has no is_locked check (allowed even after lock, per the
+   * spec's own explicit asymmetry with joining).
+   *
+   * Error responses:
+   *  401 UNAUTHORIZED             – missing/invalid JWT
+   *  403 FORBIDDEN                – authenticated but not a student
+   *  403 NOT_AUTHORIZED_TO_REMOVE – caller is neither creator nor target
+   *  404 STUDENT_NOT_FOUND        – authenticated user has no linked student record
+   *  404 TEAM_NOT_FOUND           – id doesn't match any team
+   *  404 MEMBER_NOT_FOUND         – target student isn't a member of this team
+   *  500 INTERNAL_ERROR           – unexpected server failure
+   */
+  @Delete('od-teams/:id/members/:student_id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  removeOdTeamMember(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseIntPipe) teamId: number,
+    @Param('student_id', ParseIntPipe) studentId: number,
+  ) {
+    return this.meOdTeamsService.removeOdTeamMember(
+      user.sub,
+      teamId,
+      studentId,
+    );
   }
 }

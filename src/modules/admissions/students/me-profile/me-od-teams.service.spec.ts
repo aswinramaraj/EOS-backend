@@ -13,7 +13,11 @@ describe('MeOdTeamsService', () => {
   let prisma: {
     students: { findUnique: jest.Mock };
     od_teams: { findUnique: jest.Mock };
-    od_team_members: { findUnique: jest.Mock; create: jest.Mock };
+    od_team_members: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      delete: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
 
@@ -25,7 +29,11 @@ describe('MeOdTeamsService', () => {
     prisma = {
       students: { findUnique: jest.fn() },
       od_teams: { findUnique: jest.fn() },
-      od_team_members: { findUnique: jest.fn(), create: jest.fn() },
+      od_team_members: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        delete: jest.fn(),
+      },
       $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(tx)),
     };
 
@@ -290,6 +298,170 @@ describe('MeOdTeamsService', () => {
 
       await expect(
         service.joinOdTeam(103, { unique_code: 'X7K9QT' }),
+      ).rejects.toMatchObject({
+        status: 500,
+        response: { errorCode: 'INTERNAL_ERROR' },
+      });
+    });
+  });
+
+  describe('removeOdTeamMember', () => {
+    it('creator removes another member and gets an enriched confirmation', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+      });
+      const joinedAt = new Date('2026-07-26T10:20:00.000Z');
+      prisma.od_team_members.findUnique.mockResolvedValue({
+        id: 145,
+        team_id: 61,
+        student_id: 8,
+        joined_at: joinedAt,
+      });
+      prisma.od_team_members.delete.mockResolvedValue({});
+
+      const result = await service.removeOdTeamMember(103, 61, 8);
+
+      expect(prisma.od_teams.findUnique).toHaveBeenCalledWith({
+        where: { id: 61 },
+        select: { id: true, created_by_student_id: true },
+      });
+      expect(prisma.od_team_members.findUnique).toHaveBeenCalledWith({
+        where: { team_id_student_id: { team_id: 61, student_id: 8 } },
+      });
+      expect(prisma.od_team_members.delete).toHaveBeenCalledWith({
+        where: { id: 145 },
+      });
+      expect(result.team_id).toBe(61);
+      expect(result.student_id).toBe(8);
+      expect(result.joined_at).toEqual(joinedAt);
+      expect(result.removed_at).toBeInstanceOf(Date);
+    });
+
+    it('member removes themselves (not the creator)', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+      });
+      prisma.od_team_members.findUnique.mockResolvedValue({
+        id: 145,
+        team_id: 61,
+        student_id: 8,
+        joined_at: new Date(),
+      });
+      prisma.od_team_members.delete.mockResolvedValue({});
+
+      const result = await service.removeOdTeamMember(999, 61, 8);
+
+      expect(result.student_id).toBe(8);
+      expect(prisma.od_team_members.delete).toHaveBeenCalledWith({
+        where: { id: 145 },
+      });
+    });
+
+    it('throws 404 STUDENT_NOT_FOUND when the JWT user has no linked student record', async () => {
+      prisma.students.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.removeOdTeamMember(999, 61, 8),
+      ).rejects.toMatchObject({
+        status: 404,
+        response: { errorCode: 'STUDENT_NOT_FOUND' },
+      });
+      expect(prisma.od_teams.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 TEAM_NOT_FOUND when id matches no team', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.removeOdTeamMember(103, 999, 8),
+      ).rejects.toMatchObject({
+        status: 404,
+        response: { errorCode: 'TEAM_NOT_FOUND' },
+      });
+      expect(prisma.od_team_members.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('throws 403 NOT_AUTHORIZED_TO_REMOVE when caller is neither creator nor target', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 9 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+      });
+
+      await expect(
+        service.removeOdTeamMember(555, 61, 8),
+      ).rejects.toMatchObject({
+        status: 403,
+        response: { errorCode: 'NOT_AUTHORIZED_TO_REMOVE' },
+      });
+      expect(prisma.od_team_members.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 MEMBER_NOT_FOUND via the pre-check when the target never joined', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+      });
+      prisma.od_team_members.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.removeOdTeamMember(103, 61, 999),
+      ).rejects.toMatchObject({
+        status: 404,
+        response: { errorCode: 'MEMBER_NOT_FOUND' },
+      });
+      expect(prisma.od_team_members.delete).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 MEMBER_NOT_FOUND via the P2025 backstop when the row disappears before delete', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+      });
+      prisma.od_team_members.findUnique.mockResolvedValue({
+        id: 145,
+        team_id: 61,
+        student_id: 8,
+        joined_at: new Date(),
+      });
+      const notFound = Object.assign(new Error('Record not found'), {
+        code: 'P2025',
+      });
+      prisma.od_team_members.delete.mockRejectedValue(notFound);
+
+      await expect(
+        service.removeOdTeamMember(103, 61, 8),
+      ).rejects.toMatchObject({
+        status: 404,
+        response: { errorCode: 'MEMBER_NOT_FOUND' },
+      });
+    });
+
+    it('wraps a non-P2025 DB failure on delete as 500 INTERNAL_ERROR', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+      });
+      prisma.od_team_members.findUnique.mockResolvedValue({
+        id: 145,
+        team_id: 61,
+        student_id: 8,
+        joined_at: new Date(),
+      });
+      prisma.od_team_members.delete.mockRejectedValue(
+        new Error('connection lost'),
+      );
+
+      await expect(
+        service.removeOdTeamMember(103, 61, 8),
       ).rejects.toMatchObject({
         status: 500,
         response: { errorCode: 'INTERNAL_ERROR' },
