@@ -1024,7 +1024,7 @@ describe('BorrowRecordsService', () => {
     });
   });
 
-  describe('findMyBorrowed', () => {
+  describe('findMyBorrowRecords', () => {
     const studentUser = { sub: 40, email: 'student@eos.test', role: 'student', roleId: 4 };
 
     const makeMyRecord = (overrides: Partial<Record<string, any>> = {}) => ({
@@ -1046,7 +1046,7 @@ describe('BorrowRecordsService', () => {
         makeMyRecord(),
       ]);
 
-      const result = await service.findMyBorrowed({}, studentUser);
+      const result = await service.findMyBorrowRecords({}, studentUser);
 
       expect(mockPrismaService.students.findUnique).toHaveBeenCalledWith({
         where: { user_id: studentUser.sub },
@@ -1083,7 +1083,7 @@ describe('BorrowRecordsService', () => {
       mockPrismaService.students.findUnique.mockResolvedValue({ id: 7 });
       mockPrismaService.book_borrow_records.findMany.mockResolvedValue([]);
 
-      await service.findMyBorrowed({ status: 'returned' as any }, studentUser);
+      await service.findMyBorrowRecords({ status: 'returned' as any }, studentUser);
 
       expect(
         mockPrismaService.book_borrow_records.findMany,
@@ -1098,7 +1098,7 @@ describe('BorrowRecordsService', () => {
       mockPrismaService.students.findUnique.mockResolvedValue({ id: 7 });
       mockPrismaService.book_borrow_records.findMany.mockResolvedValue([]);
 
-      await service.findMyBorrowed({ status: 'overdue' as any }, studentUser);
+      await service.findMyBorrowRecords({ status: 'overdue' as any }, studentUser);
 
       expect(
         mockPrismaService.book_borrow_records.findMany,
@@ -1117,7 +1117,7 @@ describe('BorrowRecordsService', () => {
       mockPrismaService.students.findUnique.mockResolvedValue(null);
       mockPrismaService.book_borrow_records.findMany.mockResolvedValue([]);
 
-      const result = await service.findMyBorrowed({}, studentUser);
+      const result = await service.findMyBorrowRecords({}, studentUser);
 
       expect(
         mockPrismaService.book_borrow_records.findMany,

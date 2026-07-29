@@ -17,7 +17,7 @@ import {
   BorrowStatus,
   SearchBorrowRecordsDto,
 } from './dto/search-borrow-records.dto';
-import { GetMyBorrowedDto } from './dto/get-my-borrowed.dto';
+import { GetMyBorrowRecordsDto } from './dto/get-my-borrow-records.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { Prisma } from '../../../../generated/prisma/client';
 import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface';
@@ -39,6 +39,7 @@ function startOfDay(date: Date | string) {
   d.setHours(0, 0, 0, 0);
   return d;
 }
+
 
 function daysBetween(later: Date | string, earlier: Date | string) {
   return Math.round(
@@ -334,13 +335,13 @@ export class BorrowRecordsService {
     return faculty?.id ?? null;
   }
 
-  // GET /me/library/borrowed — a student's own borrow history in a flatter
+  // GET /me/library/borrow-records — a student's own borrow history in a flatter
   // shape than formatRecord()'s (no nested student/faculty block, since the
   // caller *is* the student; no is_overdue/fine_amount, not part of this
   // endpoint's documented contract). A caller with no linked student profile
   // gets an empty list via the same -1 sentinel id used elsewhere, not an
   // error, matching findAll()'s ownership-scoping behavior.
-  async findMyBorrowed(dto: GetMyBorrowedDto, currentUser: JwtPayload) {
+  async findMyBorrowRecords(dto: GetMyBorrowRecordsDto, currentUser: JwtPayload) {
     const ownStudentId =
       (await this.resolveOwnStudentId(currentUser.sub)) ?? -1;
 

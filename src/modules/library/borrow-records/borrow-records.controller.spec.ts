@@ -17,6 +17,7 @@ describe('BorrowRecordsController', () => {
     findOne: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
+    findMyBorrowRecords: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -103,6 +104,26 @@ describe('BorrowRecordsController', () => {
     const result = await controller.remove(3);
 
     expect(mockBorrowRecordsService.remove).toHaveBeenCalledWith(3);
+    expect(result).toBe(expected);
+  });
+
+  const studentUser = { sub: 40, email: 'student@eos.test', role: 'student', roleId: 4 };
+
+  it('findMyBorrowRecords should call service.findMyBorrowRecords with the query dto, the current user, and return its result', async () => {
+    const query = { status: 'borrowed' as any };
+    const expected = {
+      success: true,
+      message: 'Borrowed books fetched successfully',
+      data: [],
+    };
+    mockBorrowRecordsService.findMyBorrowRecords.mockResolvedValue(expected);
+
+    const result = await controller.findMyBorrowRecords(query, studentUser);
+
+    expect(mockBorrowRecordsService.findMyBorrowRecords).toHaveBeenCalledWith(
+      query,
+      studentUser,
+    );
     expect(result).toBe(expected);
   });
 });
