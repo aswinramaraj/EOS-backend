@@ -6,6 +6,9 @@ import { MeController } from './me-profile.controller';
 import { MeProfileService } from './me-profile.service';
 import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
+import { MeLeavesListService } from './me-leaves-list.service';
+import { MeOdTeamsService } from './me-od-teams.service';
+import { student_leave_status_enum } from 'generated/prisma/client';
 
 describe('MeController', () => {
   let controller: MeController;
@@ -19,6 +22,12 @@ describe('MeController', () => {
   const meLeavesService = {
     createLeave: jest.fn(),
   };
+  const meLeavesListService = {
+    getMyLeaves: jest.fn(),
+  };
+  const meOdTeamsService = {
+    createOdTeam: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -27,6 +36,8 @@ describe('MeController', () => {
         { provide: MeProfileService, useValue: meProfileService },
         { provide: MeAttendanceService, useValue: meAttendanceService },
         { provide: MeLeavesService, useValue: meLeavesService },
+        { provide: MeLeavesListService, useValue: meLeavesListService },
+        { provide: MeOdTeamsService, useValue: meOdTeamsService },
       ],
     }).compile();
 
@@ -108,5 +119,38 @@ describe('MeController', () => {
     );
 
     expect(meLeavesService.createLeave).toHaveBeenCalledWith(7, dto);
+  });
+
+  it('restricts getLeaves() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const roles = reflector.get<string[]>(ROLES_KEY, controller.getLeaves);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates getLeaves() to MeLeavesListService', () => {
+    const dto = { status: student_leave_status_enum.pending };
+    void controller.getLeaves(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      dto,
+    );
+
+    expect(meLeavesListService.getMyLeaves).toHaveBeenCalledWith(7, dto);
+  });
+
+  it('restricts createOdTeam() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const roles = reflector.get<string[]>(ROLES_KEY, controller.createOdTeam);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates createOdTeam() to MeOdTeamsService, ignoring the body', () => {
+    void controller.createOdTeam(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      {},
+    );
+
+    expect(meOdTeamsService.createOdTeam).toHaveBeenCalledWith(7);
   });
 });

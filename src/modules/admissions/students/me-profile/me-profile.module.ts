@@ -4,10 +4,18 @@ import { MeController } from './me-profile.controller';
 import { MeProfileService } from './me-profile.service';
 import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
+import { MeLeavesListService } from './me-leaves-list.service';
+import { MeOdTeamsService } from './me-od-teams.service';
 
 @Module({
   imports: [PrismaModule],
   controllers: [MeController],
-  providers: [MeProfileService, MeAttendanceService, MeLeavesService],
+  providers: [
+    MeProfileService,
+    MeAttendanceService,
+    MeLeavesService,
+    MeLeavesListService,
+    MeOdTeamsService,
+  ],
 })
 export class MeProfileModule {}

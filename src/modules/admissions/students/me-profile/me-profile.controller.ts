@@ -16,9 +16,13 @@ import { ROLES } from 'src/common/constants/roles.constant';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { GetAttendanceDto } from './dto/get-attendance.dto';
 import { CreateLeaveDto } from './dto/create-leave.dto';
+import { GetLeavesDto } from './dto/get-leaves.dto';
+import { CreateOdTeamDto } from './dto/create-od-team.dto';
 import { MeProfileService } from './me-profile.service';
 import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
+import { MeLeavesListService } from './me-leaves-list.service';
+import { MeOdTeamsService } from './me-od-teams.service';
 
 @Controller('me')
 export class MeController {
@@ -26,6 +30,8 @@ export class MeController {
     private readonly meProfileService: MeProfileService,
     private readonly meAttendanceService: MeAttendanceService,
     private readonly meLeavesService: MeLeavesService,
+    private readonly meLeavesListService: MeLeavesListService,
+    private readonly meOdTeamsService: MeOdTeamsService,
   ) {}
 
   /**
@@ -123,5 +129,54 @@ export class MeController {
   @Roles(ROLES.STUDENT)
   createLeave(@CurrentUser() user: JwtPayload, @Body() dto: CreateLeaveDto) {
     return this.meLeavesService.createLeave(user.sub, dto);
+  }
+
+  /**
+   * GET /api/v1/me/leaves?status=&page=&page_size=
+   *
+   * Self-scoped: student_id resolved from the JWT. Lists the caller's own
+   * leave requests, most-recent-first, with resolved approver display
+   * strings for the mentor-faculty and HoD stages.
+   *
+   * Error responses:
+   *  400 VALIDATION_ERROR   – status isn't a real enum value
+   *  401 UNAUTHORIZED       – missing/invalid JWT
+   *  403 FORBIDDEN          – authenticated but not a student
+   *  404 STUDENT_NOT_FOUND  – authenticated user has no linked student record
+   *  500 INTERNAL_ERROR     – unexpected server failure
+   */
+  @Get('leaves')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  getLeaves(@CurrentUser() user: JwtPayload, @Query() dto: GetLeavesDto) {
+    return this.meLeavesListService.getMyLeaves(user.sub, dto);
+  }
+
+  /**
+   * POST /api/v1/me/od-teams
+   *
+   * Self-scoped: created_by_student_id resolved from the JWT. Auto-joins
+   * the creator as the team's first od_team_members row (see
+   * MeOdTeamsService for the rationale) and generates a collision-checked
+   * unique_code server-side. Request body is empty per
+   * todo.md/9-POST-me-od-teams.md — CreateOdTeamDto has no properties so
+   * the global whitelist rejects any attempt to inject
+   * created_by_student_id/unique_code/is_locked.
+   *
+   * Error responses:
+   *  401 UNAUTHORIZED       – missing/invalid JWT
+   *  403 FORBIDDEN          – authenticated but not a student
+   *  404 STUDENT_NOT_FOUND  – authenticated user has no linked student record
+   *  500 INTERNAL_ERROR     – unexpected server failure
+   */
+  @Post('od-teams')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  createOdTeam(
+    @CurrentUser() user: JwtPayload,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- CreateOdTeamDto has no properties; binding it here is what makes the global whitelist/forbidNonWhitelisted pipe reject any smuggled created_by_student_id/unique_code/is_locked in the body
+    @Body() dto: CreateOdTeamDto,
+  ) {
+    return this.meOdTeamsService.createOdTeam(user.sub);
   }
 }
