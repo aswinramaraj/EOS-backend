@@ -7,14 +7,17 @@ const CODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 describe('MeOdTeamsService', () => {
   let service: MeOdTeamsService;
   let tx: {
-    od_teams: { create: jest.Mock };
+    od_teams: { create: jest.Mock; updateMany: jest.Mock };
     od_team_members: { create: jest.Mock };
+    od_requests: { create: jest.Mock };
+    od_request_hod_approvals: { createMany: jest.Mock };
   };
   let prisma: {
-    students: { findUnique: jest.Mock };
+    students: { findUnique: jest.Mock; findMany: jest.Mock };
     od_teams: { findUnique: jest.Mock };
     od_team_members: {
       findUnique: jest.Mock;
+      findMany: jest.Mock;
       create: jest.Mock;
       delete: jest.Mock;
     };
@@ -23,14 +26,20 @@ describe('MeOdTeamsService', () => {
 
   beforeEach(async () => {
     tx = {
-      od_teams: { create: jest.fn() },
+      od_teams: {
+        create: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       od_team_members: { create: jest.fn() },
+      od_requests: { create: jest.fn() },
+      od_request_hod_approvals: { createMany: jest.fn() },
     };
     prisma = {
-      students: { findUnique: jest.fn() },
+      students: { findUnique: jest.fn(), findMany: jest.fn() },
       od_teams: { findUnique: jest.fn() },
       od_team_members: {
         findUnique: jest.fn(),
+        findMany: jest.fn(),
         create: jest.fn(),
         delete: jest.fn(),
       },
@@ -466,6 +475,356 @@ describe('MeOdTeamsService', () => {
         status: 500,
         response: { errorCode: 'INTERNAL_ERROR' },
       });
+    });
+  });
+
+  describe('submitOdRequest', () => {
+    const validDto = {
+      from_date: '2099-08-12',
+      to_date: '2099-08-13',
+      reason: 'Inter-college hackathon',
+    };
+
+    it('locks the team, fans out one approval row per member, and returns an enriched response', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+        is_locked: false,
+      });
+      prisma.od_team_members.findMany.mockResolvedValue([
+        { student_id: 7 },
+        { student_id: 8 },
+      ]);
+      prisma.students.findMany.mockResolvedValue([
+        {
+          id: 7,
+          classes: { department_id: 1, departments: { name: 'CSE' } },
+        },
+        {
+          id: 8,
+          classes: { department_id: 2, departments: { name: 'Mechanical' } },
+        },
+      ]);
+      tx.od_requests.create.mockResolvedValue({
+        id: 61,
+        team_id: 61,
+        from_date: new Date('2099-08-12T00:00:00.000Z'),
+        to_date: new Date('2099-08-13T00:00:00.000Z'),
+        reason: 'Inter-college hackathon',
+        mentor_approval_status: 'pending',
+      });
+      tx.od_request_hod_approvals.createMany.mockResolvedValue({ count: 2 });
+
+      const result = await service.submitOdRequest(103, 61, validDto);
+
+      expect(prisma.od_team_members.findMany).toHaveBeenCalledWith({
+        where: { team_id: 61 },
+        select: { student_id: true },
+      });
+      const [createArgs] = tx.od_requests.create.mock.calls[0] as [
+        { data: Record<string, unknown> },
+      ];
+      expect(createArgs.data).toMatchObject({
+        team_id: 61,
+        reason: 'Inter-college hackathon',
+        mentor_approval_status: 'pending',
+      });
+
+      const [createManyArgs] = tx.od_request_hod_approvals.createMany.mock
+        .calls[0] as [{ data: Record<string, unknown>[] }];
+      expect(createManyArgs.data).toEqual([
+        {
+          od_request_id: 61,
+          student_id: 7,
+          department_id: 1,
+          status: 'pending',
+        },
+        {
+          od_request_id: 61,
+          student_id: 8,
+          department_id: 2,
+          status: 'pending',
+        },
+      ]);
+
+      expect(tx.od_teams.updateMany).toHaveBeenCalledWith({
+        where: { id: 61, is_locked: false },
+        data: { is_locked: true },
+      });
+
+      expect(result).toMatchObject({
+        id: 61,
+        team_id: 61,
+        from_date: '2099-08-12',
+        to_date: '2099-08-13',
+        reason: 'Inter-college hackathon',
+        mentor_approval_status: 'pending',
+        hod_approvals: [
+          {
+            student_id: 7,
+            department_id: 1,
+            department_name: 'CSE',
+            status: 'pending',
+          },
+          {
+            student_id: 8,
+            department_id: 2,
+            department_name: 'Mechanical',
+            status: 'pending',
+          },
+        ],
+      });
+    });
+
+    it('gives two same-department members independent approval rows (schema-resolved dedup rule)', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+        is_locked: false,
+      });
+      prisma.od_team_members.findMany.mockResolvedValue([
+        { student_id: 7 },
+        { student_id: 8 },
+      ]);
+      prisma.students.findMany.mockResolvedValue([
+        { id: 7, classes: { department_id: 1, departments: { name: 'CSE' } } },
+        { id: 8, classes: { department_id: 1, departments: { name: 'CSE' } } },
+      ]);
+      tx.od_requests.create.mockResolvedValue({
+        id: 61,
+        team_id: 61,
+        from_date: new Date('2099-08-12T00:00:00.000Z'),
+        to_date: new Date('2099-08-13T00:00:00.000Z'),
+        reason: null,
+        mentor_approval_status: 'pending',
+      });
+      tx.od_request_hod_approvals.createMany.mockResolvedValue({ count: 2 });
+
+      await service.submitOdRequest(103, 61, {
+        from_date: '2099-08-12',
+        to_date: '2099-08-13',
+      });
+
+      const [createManyArgs] = tx.od_request_hod_approvals.createMany.mock
+        .calls[0] as [{ data: Record<string, unknown>[] }];
+      expect(createManyArgs.data).toHaveLength(2);
+      expect(createManyArgs.data[0].student_id).toBe(7);
+      expect(createManyArgs.data[1].student_id).toBe(8);
+    });
+
+    it('throws 422 INVALID_DATE_RANGE when from_date is in the past', async () => {
+      await expect(
+        service.submitOdRequest(103, 61, {
+          from_date: '2020-01-01',
+          to_date: '2020-01-05',
+        }),
+      ).rejects.toMatchObject({
+        status: 422,
+        response: { errorCode: 'INVALID_DATE_RANGE' },
+      });
+      expect(prisma.students.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('throws 422 INVALID_DATE_RANGE when from_date is after to_date', async () => {
+      await expect(
+        service.submitOdRequest(103, 61, {
+          from_date: '2099-08-10',
+          to_date: '2099-08-05',
+        }),
+      ).rejects.toMatchObject({
+        status: 422,
+        response: { errorCode: 'INVALID_DATE_RANGE' },
+      });
+    });
+
+    it('throws 404 STUDENT_NOT_FOUND when the JWT user has no linked student record', async () => {
+      prisma.students.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.submitOdRequest(999, 61, validDto),
+      ).rejects.toMatchObject({
+        status: 404,
+        response: { errorCode: 'STUDENT_NOT_FOUND' },
+      });
+    });
+
+    it('throws 404 TEAM_NOT_FOUND when id matches no team', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.submitOdRequest(103, 999, validDto),
+      ).rejects.toMatchObject({
+        status: 404,
+        response: { errorCode: 'TEAM_NOT_FOUND' },
+      });
+    });
+
+    it('throws 403 NOT_TEAM_CREATOR when caller is not the creator', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+        is_locked: false,
+      });
+
+      await expect(
+        service.submitOdRequest(555, 61, validDto),
+      ).rejects.toMatchObject({
+        status: 403,
+        response: { errorCode: 'NOT_TEAM_CREATOR' },
+      });
+      expect(prisma.od_team_members.findMany).not.toHaveBeenCalled();
+    });
+
+    it('throws 409 REQUEST_ALREADY_SUBMITTED when the team is already locked', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+        is_locked: true,
+      });
+
+      await expect(
+        service.submitOdRequest(103, 61, validDto),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: { errorCode: 'REQUEST_ALREADY_SUBMITTED' },
+      });
+    });
+
+    it('throws 422 MEMBER_MISSING_DEPARTMENT when a member has no class assigned', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+        is_locked: false,
+      });
+      prisma.od_team_members.findMany.mockResolvedValue([
+        { student_id: 7 },
+        { student_id: 8 },
+      ]);
+      prisma.students.findMany.mockResolvedValue([
+        { id: 7, classes: { department_id: 1, departments: { name: 'CSE' } } },
+        { id: 8, classes: null },
+      ]);
+
+      await expect(
+        service.submitOdRequest(103, 61, validDto),
+      ).rejects.toMatchObject({
+        status: 422,
+        response: { errorCode: 'MEMBER_MISSING_DEPARTMENT' },
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('allows a solo team (creator-only member) to submit a request', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+        is_locked: false,
+      });
+      prisma.od_team_members.findMany.mockResolvedValue([{ student_id: 7 }]);
+      prisma.students.findMany.mockResolvedValue([
+        { id: 7, classes: { department_id: 1, departments: { name: 'CSE' } } },
+      ]);
+      tx.od_requests.create.mockResolvedValue({
+        id: 61,
+        team_id: 61,
+        from_date: new Date('2099-08-12T00:00:00.000Z'),
+        to_date: new Date('2099-08-13T00:00:00.000Z'),
+        reason: 'Solo',
+        mentor_approval_status: 'pending',
+      });
+      tx.od_request_hod_approvals.createMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.submitOdRequest(103, 61, {
+        ...validDto,
+        reason: 'Solo',
+      });
+
+      expect(result.hod_approvals).toHaveLength(1);
+    });
+
+    it('wraps a DB failure mid-transaction as 500 INTERNAL_ERROR', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+        is_locked: false,
+      });
+      prisma.od_team_members.findMany.mockResolvedValue([{ student_id: 7 }]);
+      prisma.students.findMany.mockResolvedValue([
+        { id: 7, classes: { department_id: 1, departments: { name: 'CSE' } } },
+      ]);
+      prisma.$transaction.mockRejectedValue(new Error('connection lost'));
+
+      await expect(
+        service.submitOdRequest(103, 61, validDto),
+      ).rejects.toMatchObject({
+        status: 500,
+        response: { errorCode: 'INTERNAL_ERROR' },
+      });
+    });
+
+    it('throws 409 REQUEST_ALREADY_SUBMITTED via the atomic lock check when a race slips past the pre-check', async () => {
+      // Simulates the confirmed-live race: the early is_locked read passes
+      // (team.is_locked: false), but by the time the transaction's
+      // conditional UPDATE runs, a concurrent request has already locked
+      // the team — updateMany matches zero rows.
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+        is_locked: false,
+      });
+      prisma.od_team_members.findMany.mockResolvedValue([{ student_id: 7 }]);
+      prisma.students.findMany.mockResolvedValue([
+        { id: 7, classes: { department_id: 1, departments: { name: 'CSE' } } },
+      ]);
+      tx.od_teams.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.submitOdRequest(103, 61, validDto),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: { errorCode: 'REQUEST_ALREADY_SUBMITTED' },
+      });
+      expect(tx.od_teams.updateMany).toHaveBeenCalledWith({
+        where: { id: 61, is_locked: false },
+        data: { is_locked: true },
+      });
+      expect(tx.od_requests.create).not.toHaveBeenCalled();
+    });
+
+    it('allows a team with zero members to submit, producing an empty hod_approvals array', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 7 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        created_by_student_id: 7,
+        is_locked: false,
+      });
+      prisma.od_team_members.findMany.mockResolvedValue([]);
+      prisma.students.findMany.mockResolvedValue([]);
+      tx.od_requests.create.mockResolvedValue({
+        id: 61,
+        team_id: 61,
+        from_date: new Date('2099-08-12T00:00:00.000Z'),
+        to_date: new Date('2099-08-13T00:00:00.000Z'),
+        reason: null,
+        mentor_approval_status: 'pending',
+      });
+      tx.od_request_hod_approvals.createMany.mockResolvedValue({ count: 0 });
+
+      const result = await service.submitOdRequest(103, 61, {
+        from_date: '2099-08-12',
+        to_date: '2099-08-13',
+      });
+
+      expect(result.hod_approvals).toEqual([]);
     });
   });
 });

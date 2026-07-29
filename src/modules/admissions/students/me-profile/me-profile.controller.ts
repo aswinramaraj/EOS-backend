@@ -22,6 +22,7 @@ import { CreateLeaveDto } from './dto/create-leave.dto';
 import { GetLeavesDto } from './dto/get-leaves.dto';
 import { CreateOdTeamDto } from './dto/create-od-team.dto';
 import { JoinOdTeamDto } from './dto/join-od-team.dto';
+import { CreateOdRequestDto } from './dto/create-od-request.dto';
 import { MeProfileService } from './me-profile.service';
 import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
@@ -240,5 +241,37 @@ export class MeController {
       teamId,
       studentId,
     );
+  }
+
+  /**
+   * POST /api/v1/me/od-teams/:id/requests
+   *
+   * Creator-only: locks the team and fans out one od_request_hod_approvals
+   * row per member in a single transaction. See
+   * MeOdTeamsService.submitOdRequest() for the dedup rule (resolved from
+   * the schema's own unique constraint), the minimum-team-size decision,
+   * and the response-enrichment rationale.
+   *
+   * Error responses:
+   *  400 VALIDATION_ERROR          – missing/malformed from_date/to_date
+   *  401 UNAUTHORIZED              – missing/invalid JWT
+   *  403 FORBIDDEN                 – authenticated but not a student
+   *  403 NOT_TEAM_CREATOR          – caller isn't this team's creator
+   *  404 STUDENT_NOT_FOUND         – authenticated user has no linked student record
+   *  404 TEAM_NOT_FOUND            – id doesn't match any team
+   *  409 REQUEST_ALREADY_SUBMITTED – team is already locked
+   *  422 INVALID_DATE_RANGE        – from_date in the past, or from_date > to_date
+   *  422 MEMBER_MISSING_DEPARTMENT – a team member has no resolvable department
+   *  500 INTERNAL_ERROR            – unexpected server failure
+   */
+  @Post('od-teams/:id/requests')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  submitOdRequest(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseIntPipe) teamId: number,
+    @Body() dto: CreateOdRequestDto,
+  ) {
+    return this.meOdTeamsService.submitOdRequest(user.sub, teamId, dto);
   }
 }
