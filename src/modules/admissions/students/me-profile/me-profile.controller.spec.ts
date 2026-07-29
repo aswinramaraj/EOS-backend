@@ -10,6 +10,7 @@ import { MeLeavesListService } from './me-leaves-list.service';
 import { MeOdTeamsService } from './me-od-teams.service';
 import { MeOdRequestsService } from './me-od-requests.service';
 import { MeHostelOutingsService } from './me-hostel-outings.service';
+import { MeBonafideRequestsService } from './me-bonafide-requests.service';
 import { student_leave_status_enum } from 'generated/prisma/client';
 
 describe('MeController', () => {
@@ -40,6 +41,9 @@ describe('MeController', () => {
     createHostelOuting: jest.fn(),
     getMyHostelOutings: jest.fn(),
   };
+  const meBonafideRequestsService = {
+    createBonafideRequest: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -52,6 +56,10 @@ describe('MeController', () => {
         { provide: MeOdTeamsService, useValue: meOdTeamsService },
         { provide: MeOdRequestsService, useValue: meOdRequestsService },
         { provide: MeHostelOutingsService, useValue: meHostelOutingsService },
+        {
+          provide: MeBonafideRequestsService,
+          useValue: meBonafideRequestsService,
+        },
       ],
     }).compile();
 
@@ -285,5 +293,25 @@ describe('MeController', () => {
       7,
       dto,
     );
+  });
+
+  it('restricts createBonafideRequest() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const target = controller.createBonafideRequest;
+    const roles = reflector.get<string[]>(ROLES_KEY, target);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates createBonafideRequest() to MeBonafideRequestsService', () => {
+    const dto = { reason_id: 3 };
+    void controller.createBonafideRequest(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      dto,
+    );
+
+    expect(
+      meBonafideRequestsService.createBonafideRequest,
+    ).toHaveBeenCalledWith(7, dto);
   });
 });

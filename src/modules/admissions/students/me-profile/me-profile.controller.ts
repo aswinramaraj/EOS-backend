@@ -25,6 +25,7 @@ import { JoinOdTeamDto } from './dto/join-od-team.dto';
 import { CreateOdRequestDto } from './dto/create-od-request.dto';
 import { CreateHostelOutingDto } from './dto/create-hostel-outing.dto';
 import { GetHostelOutingsDto } from './dto/get-hostel-outings.dto';
+import { CreateBonafideRequestDto } from './dto/create-bonafide-request.dto';
 import { MeProfileService } from './me-profile.service';
 import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
@@ -32,6 +33,7 @@ import { MeLeavesListService } from './me-leaves-list.service';
 import { MeOdTeamsService } from './me-od-teams.service';
 import { MeOdRequestsService } from './me-od-requests.service';
 import { MeHostelOutingsService } from './me-hostel-outings.service';
+import { MeBonafideRequestsService } from './me-bonafide-requests.service';
 
 @Controller('me')
 export class MeController {
@@ -43,6 +45,7 @@ export class MeController {
     private readonly meOdTeamsService: MeOdTeamsService,
     private readonly meOdRequestsService: MeOdRequestsService,
     private readonly meHostelOutingsService: MeHostelOutingsService,
+    private readonly meBonafideRequestsService: MeBonafideRequestsService,
   ) {}
 
   /**
@@ -358,5 +361,32 @@ export class MeController {
     @Query() dto: GetHostelOutingsDto,
   ) {
     return this.meHostelOutingsService.getMyHostelOutings(user.sub, dto);
+  }
+
+  /**
+   * POST /api/v1/me/bonafide-requests
+   *
+   * Self-scoped: student_id resolved from the JWT. See
+   * MeBonafideRequestsService.createBonafideRequest() for why the
+   * duplicate-pending-request check (spec §5's soft 429) is deliberately
+   * NOT implemented, and the reason_text enrichment rationale.
+   *
+   * Error responses:
+   *  400 VALIDATION_ERROR  – reason_id missing or not a positive integer
+   *  401 UNAUTHORIZED      – missing/invalid JWT
+   *  403 FORBIDDEN         – authenticated but not a student
+   *  404 STUDENT_NOT_FOUND – authenticated user has no linked student record
+   *  404 REASON_NOT_FOUND  – reason_id doesn't reference an existing
+   *                          bonafide_reasons row
+   *  500 INTERNAL_ERROR    – unexpected server failure
+   */
+  @Post('bonafide-requests')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  createBonafideRequest(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateBonafideRequestDto,
+  ) {
+    return this.meBonafideRequestsService.createBonafideRequest(user.sub, dto);
   }
 }
