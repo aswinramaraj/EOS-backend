@@ -9,6 +9,7 @@ import { MeLeavesService } from './me-leaves.service';
 import { MeLeavesListService } from './me-leaves-list.service';
 import { MeOdTeamsService } from './me-od-teams.service';
 import { MeOdRequestsService } from './me-od-requests.service';
+import { MeHostelOutingsService } from './me-hostel-outings.service';
 import { student_leave_status_enum } from 'generated/prisma/client';
 
 describe('MeController', () => {
@@ -35,6 +36,9 @@ describe('MeController', () => {
   const meOdRequestsService = {
     getOdRequestStatus: jest.fn(),
   };
+  const meHostelOutingsService = {
+    createHostelOuting: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -46,6 +50,7 @@ describe('MeController', () => {
         { provide: MeLeavesListService, useValue: meLeavesListService },
         { provide: MeOdTeamsService, useValue: meOdTeamsService },
         { provide: MeOdRequestsService, useValue: meOdRequestsService },
+        { provide: MeHostelOutingsService, useValue: meHostelOutingsService },
       ],
     }).compile();
 
@@ -231,5 +236,32 @@ describe('MeController', () => {
     );
 
     expect(meOdRequestsService.getOdRequestStatus).toHaveBeenCalledWith(7, 61);
+  });
+
+  it('restricts createHostelOuting() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const target = controller.createHostelOuting;
+    const roles = reflector.get<string[]>(ROLES_KEY, target);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates createHostelOuting() to MeHostelOutingsService', () => {
+    const dto = {
+      from_date: '2099-08-02',
+      to_date: '2099-08-02',
+      start_time: '09:00',
+      return_time: '18:00',
+      reason: 'Family visit',
+    };
+    void controller.createHostelOuting(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      dto,
+    );
+
+    expect(meHostelOutingsService.createHostelOuting).toHaveBeenCalledWith(
+      7,
+      dto,
+    );
   });
 });

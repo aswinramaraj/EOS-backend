@@ -23,12 +23,14 @@ import { GetLeavesDto } from './dto/get-leaves.dto';
 import { CreateOdTeamDto } from './dto/create-od-team.dto';
 import { JoinOdTeamDto } from './dto/join-od-team.dto';
 import { CreateOdRequestDto } from './dto/create-od-request.dto';
+import { CreateHostelOutingDto } from './dto/create-hostel-outing.dto';
 import { MeProfileService } from './me-profile.service';
 import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
 import { MeLeavesListService } from './me-leaves-list.service';
 import { MeOdTeamsService } from './me-od-teams.service';
 import { MeOdRequestsService } from './me-od-requests.service';
+import { MeHostelOutingsService } from './me-hostel-outings.service';
 
 @Controller('me')
 export class MeController {
@@ -39,6 +41,7 @@ export class MeController {
     private readonly meLeavesListService: MeLeavesListService,
     private readonly meOdTeamsService: MeOdTeamsService,
     private readonly meOdRequestsService: MeOdRequestsService,
+    private readonly meHostelOutingsService: MeHostelOutingsService,
   ) {}
 
   /**
@@ -302,5 +305,32 @@ export class MeController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.meOdRequestsService.getOdRequestStatus(user.sub, id);
+  }
+
+  /**
+   * POST /api/v1/me/hostel-outings
+   *
+   * Self-scoped: student_id resolved from the JWT. See
+   * MeHostelOutingsService.createHostelOuting() for why the hosteller
+   * check is implemented (not left pending) and the room_number
+   * enrichment rationale.
+   *
+   * Error responses:
+   *  400 VALIDATION_ERROR   – missing/malformed from_date/to_date/start_time
+   *  401 UNAUTHORIZED       – missing/invalid JWT
+   *  403 FORBIDDEN          – authenticated but not a student
+   *  404 STUDENT_NOT_FOUND  – authenticated user has no linked student record
+   *  422 INVALID_DATE_RANGE – from_date in the past, or from_date > to_date
+   *  422 NOT_A_HOSTELLER    – caller has no student_hostel_mapping row
+   *  500 INTERNAL_ERROR     – unexpected server failure
+   */
+  @Post('hostel-outings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  createHostelOuting(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateHostelOutingDto,
+  ) {
+    return this.meHostelOutingsService.createHostelOuting(user.sub, dto);
   }
 }
