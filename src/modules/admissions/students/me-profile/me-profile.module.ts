@@ -6,6 +6,7 @@ import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
 import { MeLeavesListService } from './me-leaves-list.service';
 import { MeOdTeamsService } from './me-od-teams.service';
+import { MeOdRequestsService } from './me-od-requests.service';
 
 @Module({
   imports: [PrismaModule],
@@ -16,6 +17,7 @@ import { MeOdTeamsService } from './me-od-teams.service';
     MeLeavesService,
     MeLeavesListService,
     MeOdTeamsService,
+    MeOdRequestsService,
   ],
 })
 export class MeProfileModule {}

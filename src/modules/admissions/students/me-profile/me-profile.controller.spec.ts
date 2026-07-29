@@ -8,6 +8,7 @@ import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
 import { MeLeavesListService } from './me-leaves-list.service';
 import { MeOdTeamsService } from './me-od-teams.service';
+import { MeOdRequestsService } from './me-od-requests.service';
 import { student_leave_status_enum } from 'generated/prisma/client';
 
 describe('MeController', () => {
@@ -31,6 +32,9 @@ describe('MeController', () => {
     removeOdTeamMember: jest.fn(),
     submitOdRequest: jest.fn(),
   };
+  const meOdRequestsService = {
+    getOdRequestStatus: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -41,6 +45,7 @@ describe('MeController', () => {
         { provide: MeLeavesService, useValue: meLeavesService },
         { provide: MeLeavesListService, useValue: meLeavesListService },
         { provide: MeOdTeamsService, useValue: meOdTeamsService },
+        { provide: MeOdRequestsService, useValue: meOdRequestsService },
       ],
     }).compile();
 
@@ -209,5 +214,22 @@ describe('MeController', () => {
     );
 
     expect(meOdTeamsService.submitOdRequest).toHaveBeenCalledWith(7, 61, dto);
+  });
+
+  it('restricts getOdRequest() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const target = controller.getOdRequest;
+    const roles = reflector.get<string[]>(ROLES_KEY, target);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates getOdRequest() to MeOdRequestsService with the id', () => {
+    void controller.getOdRequest(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      61,
+    );
+
+    expect(meOdRequestsService.getOdRequestStatus).toHaveBeenCalledWith(7, 61);
   });
 });

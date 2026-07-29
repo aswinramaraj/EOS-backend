@@ -28,6 +28,7 @@ import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
 import { MeLeavesListService } from './me-leaves-list.service';
 import { MeOdTeamsService } from './me-od-teams.service';
+import { MeOdRequestsService } from './me-od-requests.service';
 
 @Controller('me')
 export class MeController {
@@ -37,6 +38,7 @@ export class MeController {
     private readonly meLeavesService: MeLeavesService,
     private readonly meLeavesListService: MeLeavesListService,
     private readonly meOdTeamsService: MeOdTeamsService,
+    private readonly meOdRequestsService: MeOdRequestsService,
   ) {}
 
   /**
@@ -273,5 +275,32 @@ export class MeController {
     @Body() dto: CreateOdRequestDto,
   ) {
     return this.meOdTeamsService.submitOdRequest(user.sub, teamId, dto);
+  }
+
+  /**
+   * GET /api/v1/me/od-requests/:id
+   *
+   * Authorization: any member of the request's team (not creator-only) —
+   * resolved from the JWT. See MeOdRequestsService.getOdRequestStatus() for
+   * the name-resolution fallback chain, the department_name enrichment,
+   * and the overall_status precedence decision.
+   *
+   * Error responses:
+   *  400 VALIDATION_ERROR    – id isn't an integer
+   *  401 UNAUTHORIZED        – missing/invalid JWT
+   *  403 FORBIDDEN           – authenticated but not a student
+   *  403 NOT_A_TEAM_MEMBER   – caller isn't on the request's team
+   *  404 STUDENT_NOT_FOUND   – authenticated user has no linked student record
+   *  404 OD_REQUEST_NOT_FOUND – id doesn't match any od_requests row
+   *  500 INTERNAL_ERROR      – unexpected server failure
+   */
+  @Get('od-requests/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  getOdRequest(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.meOdRequestsService.getOdRequestStatus(user.sub, id);
   }
 }
