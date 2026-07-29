@@ -12,6 +12,8 @@ describe('MeOdTeamsService', () => {
   };
   let prisma: {
     students: { findUnique: jest.Mock };
+    od_teams: { findUnique: jest.Mock };
+    od_team_members: { findUnique: jest.Mock; create: jest.Mock };
     $transaction: jest.Mock;
   };
 
@@ -22,6 +24,8 @@ describe('MeOdTeamsService', () => {
     };
     prisma = {
       students: { findUnique: jest.fn() },
+      od_teams: { findUnique: jest.fn() },
+      od_team_members: { findUnique: jest.fn(), create: jest.fn() },
       $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(tx)),
     };
 
@@ -147,5 +151,149 @@ describe('MeOdTeamsService', () => {
       response: { errorCode: 'INTERNAL_ERROR' },
     });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  describe('joinOdTeam', () => {
+    it('joins an unlocked team and returns an enriched, nested response', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        unique_code: 'X7K9QT',
+        is_locked: false,
+      });
+      prisma.od_team_members.findUnique.mockResolvedValue(null);
+      prisma.od_team_members.create.mockResolvedValue({
+        id: 145,
+        team_id: 61,
+        student_id: 8,
+        joined_at: new Date('2026-07-26T10:20:00.000Z'),
+      });
+
+      const result = await service.joinOdTeam(103, { unique_code: 'X7K9QT' });
+
+      expect(prisma.od_teams.findUnique).toHaveBeenCalledWith({
+        where: { unique_code: 'X7K9QT' },
+        select: { id: true, unique_code: true, is_locked: true },
+      });
+      expect(prisma.od_team_members.findUnique).toHaveBeenCalledWith({
+        where: { team_id_student_id: { team_id: 61, student_id: 8 } },
+      });
+      expect(prisma.od_team_members.create).toHaveBeenCalledWith({
+        data: { team_id: 61, student_id: 8 },
+      });
+      expect(result).toEqual({
+        id: 145,
+        team_id: 61,
+        student_id: 8,
+        joined_at: new Date('2026-07-26T10:20:00.000Z'),
+        team: { unique_code: 'X7K9QT', is_locked: false },
+      });
+    });
+
+    it('throws 404 STUDENT_NOT_FOUND when the JWT user has no linked student record', async () => {
+      prisma.students.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.joinOdTeam(999, { unique_code: 'X7K9QT' }),
+      ).rejects.toMatchObject({
+        status: 404,
+        response: { errorCode: 'STUDENT_NOT_FOUND' },
+      });
+      expect(prisma.od_teams.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 TEAM_NOT_FOUND when unique_code matches no team', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.od_teams.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.joinOdTeam(103, { unique_code: 'NOTREAL' }),
+      ).rejects.toMatchObject({
+        status: 404,
+        response: { errorCode: 'TEAM_NOT_FOUND' },
+      });
+      expect(prisma.od_team_members.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('throws 422 TEAM_LOCKED when the team is locked', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        unique_code: 'X7K9QT',
+        is_locked: true,
+      });
+
+      await expect(
+        service.joinOdTeam(103, { unique_code: 'X7K9QT' }),
+      ).rejects.toMatchObject({
+        status: 422,
+        response: { errorCode: 'TEAM_LOCKED' },
+      });
+      expect(prisma.od_team_members.findUnique).not.toHaveBeenCalled();
+      expect(prisma.od_team_members.create).not.toHaveBeenCalled();
+    });
+
+    it('throws 409 ALREADY_A_MEMBER via the pre-check when already a member', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        unique_code: 'X7K9QT',
+        is_locked: false,
+      });
+      prisma.od_team_members.findUnique.mockResolvedValue({
+        id: 90,
+        team_id: 61,
+        student_id: 8,
+      });
+
+      await expect(
+        service.joinOdTeam(103, { unique_code: 'X7K9QT' }),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: { errorCode: 'ALREADY_A_MEMBER' },
+      });
+      expect(prisma.od_team_members.create).not.toHaveBeenCalled();
+    });
+
+    it('throws 409 ALREADY_A_MEMBER via the P2002 backstop when a race slips past the pre-check', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        unique_code: 'X7K9QT',
+        is_locked: false,
+      });
+      prisma.od_team_members.findUnique.mockResolvedValue(null);
+      const conflict = Object.assign(new Error('Unique constraint failed'), {
+        code: 'P2002',
+      });
+      prisma.od_team_members.create.mockRejectedValue(conflict);
+
+      await expect(
+        service.joinOdTeam(103, { unique_code: 'X7K9QT' }),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: { errorCode: 'ALREADY_A_MEMBER' },
+      });
+    });
+
+    it('wraps a non-collision DB failure on insert as 500 INTERNAL_ERROR', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.od_teams.findUnique.mockResolvedValue({
+        id: 61,
+        unique_code: 'X7K9QT',
+        is_locked: false,
+      });
+      prisma.od_team_members.findUnique.mockResolvedValue(null);
+      prisma.od_team_members.create.mockRejectedValue(
+        new Error('connection lost'),
+      );
+
+      await expect(
+        service.joinOdTeam(103, { unique_code: 'X7K9QT' }),
+      ).rejects.toMatchObject({
+        status: 500,
+        response: { errorCode: 'INTERNAL_ERROR' },
+      });
+    });
   });
 });

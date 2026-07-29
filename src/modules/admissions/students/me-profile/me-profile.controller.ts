@@ -18,6 +18,7 @@ import { GetAttendanceDto } from './dto/get-attendance.dto';
 import { CreateLeaveDto } from './dto/create-leave.dto';
 import { GetLeavesDto } from './dto/get-leaves.dto';
 import { CreateOdTeamDto } from './dto/create-od-team.dto';
+import { JoinOdTeamDto } from './dto/join-od-team.dto';
 import { MeProfileService } from './me-profile.service';
 import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
@@ -178,5 +179,30 @@ export class MeController {
     @Body() dto: CreateOdTeamDto,
   ) {
     return this.meOdTeamsService.createOdTeam(user.sub);
+  }
+
+  /**
+   * POST /api/v1/me/od-teams/join
+   *
+   * Self-scoped: student_id resolved from the JWT. Resolves the target team
+   * from the client-supplied unique_code — the only field the client
+   * controls. See MeOdTeamsService.joinOdTeam() for the already-member race
+   * handling and the response-enrichment rationale.
+   *
+   * Error responses:
+   *  400 VALIDATION_ERROR   – unique_code missing/empty
+   *  401 UNAUTHORIZED       – missing/invalid JWT
+   *  403 FORBIDDEN          – authenticated but not a student
+   *  404 STUDENT_NOT_FOUND  – authenticated user has no linked student record
+   *  404 TEAM_NOT_FOUND     – unique_code doesn't match any team
+   *  409 ALREADY_A_MEMBER   – student already belongs to this team
+   *  422 TEAM_LOCKED        – team is no longer accepting new members
+   *  500 INTERNAL_ERROR     – unexpected server failure
+   */
+  @Post('od-teams/join')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  joinOdTeam(@CurrentUser() user: JwtPayload, @Body() dto: JoinOdTeamDto) {
+    return this.meOdTeamsService.joinOdTeam(user.sub, dto);
   }
 }

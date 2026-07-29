@@ -1,11 +1,14 @@
 import {
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import * as crypto from 'node:crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { JoinOdTeamDto } from './dto/join-od-team.dto';
 
 // Crockford's Base32 alphabet — excludes I, L, O, U to avoid transcription
 // ambiguity when a code is shared verbally or by text between teammates.
@@ -98,7 +101,7 @@ export class MeOdTeamsService {
         };
       } catch (err) {
         if (
-          this.isUniqueCodeConflict(err) &&
+          this.isUniqueConstraintError(err) &&
           attempt < MAX_GENERATION_ATTEMPTS
         ) {
           continue;
@@ -119,7 +122,132 @@ export class MeOdTeamsService {
     });
   }
 
-  private isUniqueCodeConflict(err: unknown): boolean {
+  /**
+   * POST /me/od-teams/join
+   *
+   * Self-scoped: student_id resolved from the JWT, team resolved from the
+   * client-supplied unique_code (the only field the client controls here —
+   * matches the spec's own design of the code as a shareable "join secret").
+   *
+   * The already-member check is done twice by design: once as a friendly
+   * pre-check (clear 409 without touching od_team_members.create at all),
+   * and again as a P2002 catch on the insert itself — the insert is the
+   * real correctness guarantee (Postgres enforces @@unique([team_id,
+   * student_id]) atomically regardless of how the two requests interleave),
+   * closing the race window the spec's DB Operations section calls out,
+   * without needing an explicit $transaction (a single INSERT statement is
+   * already atomic; there's nothing to wrap two statements together for).
+   *
+   * The lock-check-then-insert TOCTOU race the spec's Notes section flags
+   * (a member sneaking in the instant a team gets locked) is not otherwise
+   * guarded against here: nothing in this codebase yet flips
+   * od_teams.is_locked from false to true (that trigger is itself marked
+   * "Pending from Backend Implementation" in todo.md/9-POST-me-od-teams.md
+   * §8/§12), so there is currently no code path that can race against this
+   * one. Worth revisiting once a lock-triggering endpoint exists.
+   *
+   * Response is intentionally nested (a `team` sub-object) rather than a
+   * flat echo of the spec's minimal `{id, team_id, student_id, joined_at}`
+   * shape — since the lock check already fetches unique_code/is_locked,
+   * returning them costs no extra query and gives the client immediate
+   * confirmation of which team it joined and its current lock state,
+   * rather than a bare numeric team_id it would otherwise have to look up
+   * separately.
+   *
+   * Error cases:
+   *  404 STUDENT_NOT_FOUND  – authenticated user has no linked student
+   *                           record (spec marks this "not applicable" but
+   *                           kept for consistency with every sibling
+   *                           /me/* endpoint)
+   *  404 TEAM_NOT_FOUND     – unique_code doesn't match any od_teams row
+   *  422 TEAM_LOCKED        – the team is no longer accepting new members
+   *  409 ALREADY_A_MEMBER   – student already has a membership row for
+   *                           this team
+   *  500 INTERNAL_ERROR     – unexpected DB failure
+   */
+  async joinOdTeam(userId: number, dto: JoinOdTeamDto) {
+    const student = await this.prisma.students.findUnique({
+      where: { user_id: userId },
+      select: { id: true },
+    });
+    if (!student) {
+      throw new NotFoundException({
+        message: 'Student profile not found for this account',
+        errorCode: 'STUDENT_NOT_FOUND',
+      });
+    }
+
+    const team = await this.prisma.od_teams.findUnique({
+      where: { unique_code: dto.unique_code },
+      select: { id: true, unique_code: true, is_locked: true },
+    });
+    if (!team) {
+      throw new NotFoundException({
+        message: 'No team found with this code',
+        errorCode: 'TEAM_NOT_FOUND',
+      });
+    }
+    if (team.is_locked) {
+      throw new UnprocessableEntityException({
+        message: 'This team is locked and no longer accepting new members',
+        errorCode: 'TEAM_LOCKED',
+      });
+    }
+
+    const existingMembership = await this.prisma.od_team_members.findUnique({
+      where: {
+        team_id_student_id: { team_id: team.id, student_id: student.id },
+      },
+    });
+    if (existingMembership) {
+      throw new ConflictException({
+        message: 'You are already a member of this team',
+        errorCode: 'ALREADY_A_MEMBER',
+      });
+    }
+
+    const membership = await this.insertMembership(userId, team, student.id);
+
+    return {
+      id: membership.id,
+      team_id: membership.team_id,
+      student_id: membership.student_id,
+      joined_at: membership.joined_at,
+      team: {
+        unique_code: team.unique_code,
+        is_locked: team.is_locked,
+      },
+    };
+  }
+
+  private async insertMembership(
+    userId: number,
+    team: { id: number },
+    studentId: number,
+  ) {
+    try {
+      return await this.prisma.od_team_members.create({
+        data: {
+          team_id: team.id,
+          student_id: studentId,
+        },
+      });
+    } catch (err) {
+      if (this.isUniqueConstraintError(err)) {
+        throw new ConflictException({
+          message: 'You are already a member of this team',
+          errorCode: 'ALREADY_A_MEMBER',
+        });
+      }
+      this.logger.error(`Failed to join OD team for user ${userId}`, err);
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  private isUniqueConstraintError(err: unknown): boolean {
     return (
       typeof err === 'object' &&
       err !== null &&

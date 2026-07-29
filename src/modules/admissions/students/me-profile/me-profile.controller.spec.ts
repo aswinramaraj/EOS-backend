@@ -27,6 +27,7 @@ describe('MeController', () => {
   };
   const meOdTeamsService = {
     createOdTeam: jest.fn(),
+    joinOdTeam: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -152,5 +153,22 @@ describe('MeController', () => {
     );
 
     expect(meOdTeamsService.createOdTeam).toHaveBeenCalledWith(7);
+  });
+
+  it('restricts joinOdTeam() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const roles = reflector.get<string[]>(ROLES_KEY, controller.joinOdTeam);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates joinOdTeam() to MeOdTeamsService', () => {
+    const dto = { unique_code: 'X7K9QT' };
+    void controller.joinOdTeam(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      dto,
+    );
+
+    expect(meOdTeamsService.joinOdTeam).toHaveBeenCalledWith(7, dto);
   });
 });
