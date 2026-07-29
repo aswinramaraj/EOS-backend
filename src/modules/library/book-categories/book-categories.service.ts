@@ -4,8 +4,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import type { Prisma } from '../../../../generated/prisma/client';
 import { CreateBookCategoryDto } from './dto/create-book-category.dto';
 import { UpdateBookCategoryDto } from './dto/update-book-category.dto';
+import { SearchBookCategoriesDto } from './dto/search-book-categories.dto';
 
 // Minimum trigram/word similarity score for a row to count as a fuzzy match.
 const FUZZY_SIMILARITY_THRESHOLD = 0.2;
@@ -44,15 +46,33 @@ export class BookCategoriesService {
     };
   }
 
-  async findAll() {
-    const categories = await this.prisma.book_categories.findMany({
-      orderBy: {
-        name: 'asc',
-      },
-    });
+  async findAll(searchDto: SearchBookCategoriesDto = {}) {
+    const { q, page = 1, page_size = 20 } = searchDto;
+
+    const where: Prisma.book_categoriesWhereInput = {};
+
+    if (q) {
+      where.name = { contains: q, mode: 'insensitive' };
+    }
+
+    const [categories, total] = await this.prisma.$transaction([
+      this.prisma.book_categories.findMany({
+        where,
+        orderBy: {
+          name: 'asc',
+        },
+        skip: (page - 1) * page_size,
+        take: page_size,
+      }),
+
+      this.prisma.book_categories.count({ where }),
+    ]);
 
     return {
       success: true,
+      page,
+      page_size,
+      total,
       data: categories,
     };
   }

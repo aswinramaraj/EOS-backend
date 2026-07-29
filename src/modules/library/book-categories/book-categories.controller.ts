@@ -11,13 +11,14 @@ import {
 import { BookCategoriesService } from './book-categories.service';
 import { CreateBookCategoryDto } from './dto/create-book-category.dto';
 import { UpdateBookCategoryDto } from './dto/update-book-category.dto';
+import { SearchBookCategoriesDto } from './dto/search-book-categories.dto';
 import { UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { FuzzySearchDto } from 'src/common';
 
-@Controller('book-categories')
+@Controller('library/book-categories')
 export class BookCategoriesController {
   constructor(private readonly bookCategoriesService: BookCategoriesService) {}
 
@@ -30,8 +31,8 @@ export class BookCategoriesController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  findAll() {
-    return this.bookCategoriesService.findAll();
+  findAll(@Query() query: SearchBookCategoriesDto) {
+    return this.bookCategoriesService.findAll(query);
   }
 
   // Must come before ':id' — otherwise Nest would try to match "search" as an :id param.

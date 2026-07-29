@@ -7,16 +7,16 @@
 
 ## Resource 1: Books
 
-**URL:** `/api/v1/books`
+**URL:** `/api/v1/library/books`
 **Roles:** Create/Update/Delete → `library` | Read → all staff + student
 
 | Method | URL | Purpose |
 |--------|-----|---------|
-| POST | `/books` | Add book to library |
-| GET | `/books` | List all books |
-| GET | `/books/:id` | Get book details |
-| PATCH | `/books/:id` | Update book info |
-| DELETE | `/books/:id` | Remove book |
+| POST | `/library/books` | Add book to library |
+| GET | `/library/books` | List all books |
+| GET | `/library/books/:id` | Get book details |
+| PATCH | `/library/books/:id` | Update book info |
+| DELETE | `/library/books/:id` | Remove book |
 
 ### POST / PATCH Body
 
@@ -56,15 +56,15 @@
 
 ## Resource 2: Borrow Records
 
-**URL:** `/api/v1/borrow-records`
+**URL:** `/api/v1/library/borrow-records`
 **Roles:** Create/Update → `library` | Read → `library`, `student` (own), `faculty` (own)
 
 | Method | URL | Purpose |
 |--------|-----|---------|
-| POST | `/borrow-records` | Issue book to student/faculty |
-| GET | `/borrow-records` | List borrow records |
-| GET | `/borrow-records/:id` | Get record |
-| PATCH | `/borrow-records/:id` | Return book / renew |
+| POST | `/library/borrow-records` | Issue book to student/faculty |
+| GET | `/library/borrow-records` | List borrow records |
+| GET | `/library/borrow-records/:id` | Get record |
+| PATCH | `/library/borrow-records/:id` | Return book / renew |
 
 ### POST Body
 
@@ -108,16 +108,16 @@
 
 ## Resource 3: E-Resources
 
-**URL:** `/api/v1/e-resources`
+**URL:** `/api/v1/library/e-resources`
 **Roles:** Create/Update/Delete → `library` | Read → all staff + student
 
 | Method | URL | Purpose |
 |--------|-----|---------|
-| POST | `/e-resources` | Add e-resource |
-| GET | `/e-resources` | List e-resources |
-| GET | `/e-resources/:id` | Get resource |
-| PATCH | `/e-resources/:id` | Update resource |
-| DELETE | `/e-resources/:id` | Remove resource |
+| POST | `/library/e-resources` | Add e-resource |
+| GET | `/library/e-resources` | List e-resources |
+| GET | `/library/e-resources/:id` | Get resource |
+| PATCH | `/library/e-resources/:id` | Update resource |
+| DELETE | `/library/e-resources/:id` | Remove resource |
 
 ### POST / PATCH Body
 

@@ -39,40 +39,49 @@ describe('BorrowRecordsController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('findAll should call service.findAll with the query dto and return its result', async () => {
+  const libraryUser = { sub: 1, email: 'library@eos.test', role: 'library', roleId: 8 };
+
+  it('findAll should call service.findAll with the query dto, the current user, and return its result', async () => {
     const query = { student_id: 5, page: 1, page_size: 20 };
     const expected = { page: 1, page_size: 20, total: 0, data: [] };
     mockBorrowRecordsService.findAll.mockResolvedValue(expected);
 
-    const result = await controller.findAll(query);
+    const result = await controller.findAll(query, libraryUser);
 
-    expect(mockBorrowRecordsService.findAll).toHaveBeenCalledWith(query);
+    expect(mockBorrowRecordsService.findAll).toHaveBeenCalledWith(
+      query,
+      libraryUser,
+    );
     expect(result).toBe(expected);
   });
 
-  it('findOne should call service.findOne with the parsed id and return its result', async () => {
+  it('findOne should call service.findOne with the parsed id, the current user, and return its result', async () => {
     const expected = { id: 3, status: 'borrowed' };
     mockBorrowRecordsService.findOne.mockResolvedValue(expected);
 
-    const result = await controller.findOne(3);
+    const result = await controller.findOne(3, libraryUser);
 
-    expect(mockBorrowRecordsService.findOne).toHaveBeenCalledWith(3);
+    expect(mockBorrowRecordsService.findOne).toHaveBeenCalledWith(
+      3,
+      libraryUser,
+    );
     expect(result).toBe(expected);
   });
 
-  it('create should call service.create with the dto and return its result', async () => {
+  it('create should call service.create with the dto, the current user, and return its result', async () => {
     const dto = {
       book_id: 2,
       borrower_type: BorrowerType.student,
       student_id: 5,
       due_date: '2026-08-15',
     };
+    const user = { sub: 1, email: 'library@eos.test', role: 'library', roleId: 8 };
     const expected = { id: 3, ...dto, status: 'borrowed' };
     mockBorrowRecordsService.create.mockResolvedValue(expected);
 
-    const result = await controller.create(dto);
+    const result = await controller.create(dto, user);
 
-    expect(mockBorrowRecordsService.create).toHaveBeenCalledWith(dto);
+    expect(mockBorrowRecordsService.create).toHaveBeenCalledWith(dto, user);
     expect(result).toBe(expected);
   });
 

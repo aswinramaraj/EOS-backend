@@ -45,13 +45,13 @@ describe('Book Categories API (e2e)', () => {
   describe('authentication', () => {
     it('rejects requests with no token', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/book-categories')
+        .get('/api/v1/library/book-categories')
         .expect(401);
     });
 
     it('rejects requests with an invalid token', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/book-categories')
+        .get('/api/v1/library/book-categories')
         .set('Authorization', 'Bearer not-a-real-token')
         .expect(401);
     });
@@ -60,14 +60,14 @@ describe('Book Categories API (e2e)', () => {
   describe('authorization', () => {
     it('allows a student to read categories (read is open to any authenticated role)', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/book-categories')
+        .get('/api/v1/library/book-categories')
         .set('Authorization', `Bearer ${studentToken}`)
         .expect(200);
     });
 
     it('prevents a student from creating a category', async () => {
       await request(app.getHttpServer())
-        .post('/api/v1/book-categories')
+        .post('/api/v1/library/book-categories')
         .set('Authorization', `Bearer ${studentToken}`)
         .send({ name: `${uniqueName}-student-attempt` })
         .expect(403);
@@ -75,7 +75,7 @@ describe('Book Categories API (e2e)', () => {
 
     it('allows a library user to create a category', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/v1/book-categories')
+        .post('/api/v1/library/book-categories')
         .set('Authorization', `Bearer ${libraryToken}`)
         .send({ name: uniqueName })
         .expect(201);
@@ -86,7 +86,7 @@ describe('Book Categories API (e2e)', () => {
 
     it('allows an admin to create a category', async () => {
       await request(app.getHttpServer())
-        .post('/api/v1/book-categories')
+        .post('/api/v1/library/book-categories')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ name: `${uniqueName}-admin` })
         .expect(201);
@@ -96,21 +96,21 @@ describe('Book Categories API (e2e)', () => {
   describe('CRUD workflow', () => {
     it('reads the created category by id', async () => {
       await request(app.getHttpServer())
-        .get(`/api/v1/book-categories/${createdCategoryId}`)
+        .get(`/api/v1/library/book-categories/${createdCategoryId}`)
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(200);
     });
 
     it('lists categories', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/book-categories')
+        .get('/api/v1/library/book-categories')
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(200);
     });
 
     it('rejects duplicate category names', async () => {
       await request(app.getHttpServer())
-        .post('/api/v1/book-categories')
+        .post('/api/v1/library/book-categories')
         .set('Authorization', `Bearer ${libraryToken}`)
         .send({ name: uniqueName })
         .expect(409);
@@ -118,7 +118,7 @@ describe('Book Categories API (e2e)', () => {
 
     it('updates the created category', async () => {
       await request(app.getHttpServer())
-        .patch(`/api/v1/book-categories/${createdCategoryId}`)
+        .patch(`/api/v1/library/book-categories/${createdCategoryId}`)
         .set('Authorization', `Bearer ${libraryToken}`)
         .send({ name: `${uniqueName} (renamed)` })
         .expect(200);
@@ -126,14 +126,14 @@ describe('Book Categories API (e2e)', () => {
 
     it('prevents a student from deleting a category', async () => {
       await request(app.getHttpServer())
-        .delete(`/api/v1/book-categories/${createdCategoryId}`)
+        .delete(`/api/v1/library/book-categories/${createdCategoryId}`)
         .set('Authorization', `Bearer ${studentToken}`)
         .expect(403);
     });
 
     it('deletes the created category', async () => {
       await request(app.getHttpServer())
-        .delete(`/api/v1/book-categories/${createdCategoryId}`)
+        .delete(`/api/v1/library/book-categories/${createdCategoryId}`)
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(200);
     });
@@ -145,7 +145,7 @@ describe('Book Categories API (e2e)', () => {
 
     beforeAll(async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/v1/book-categories')
+        .post('/api/v1/library/book-categories')
         .set('Authorization', `Bearer ${libraryToken}`)
         .send({ name: fuzzyName })
         .expect(201);
@@ -155,20 +155,20 @@ describe('Book Categories API (e2e)', () => {
 
     afterAll(async () => {
       await request(app.getHttpServer())
-        .delete(`/api/v1/book-categories/${fuzzyCategoryId}`)
+        .delete(`/api/v1/library/book-categories/${fuzzyCategoryId}`)
         .set('Authorization', `Bearer ${libraryToken}`);
     });
 
     it('rejects requests with no token', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/book-categories/search')
+        .get('/api/v1/library/book-categories/search')
         .query({ q: 'engineering' })
         .expect(401);
     });
 
     it('returns a validation error for an empty query', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/book-categories/search')
+        .get('/api/v1/library/book-categories/search')
         .query({ q: '' })
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(400);
@@ -176,7 +176,7 @@ describe('Book Categories API (e2e)', () => {
 
     it('returns a validation error for a query shorter than 2 characters', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/book-categories/search')
+        .get('/api/v1/library/book-categories/search')
         .query({ q: 'e' })
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(400);
@@ -184,7 +184,7 @@ describe('Book Categories API (e2e)', () => {
 
     it('finds the category despite typos in the query', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/v1/book-categories/search')
+        .get('/api/v1/library/book-categories/search')
         .query({ q: fuzzyName.replace('Engineering', 'enginering') })
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(200);
@@ -197,7 +197,7 @@ describe('Book Categories API (e2e)', () => {
 
     it('returns an empty array for unrelated text', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/v1/book-categories/search')
+        .get('/api/v1/library/book-categories/search')
         .query({ q: 'zzzqqqxxxnomatch' })
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(200);

@@ -40,7 +40,7 @@ describe('Books API (e2e)', () => {
     studentToken = await login('student@eos.test', 'EOS@test123');
 
     const categoryRes = await request(app.getHttpServer())
-      .post('/api/v1/book-categories')
+      .post('/api/v1/library/book-categories')
       .set('Authorization', `Bearer ${libraryToken}`)
       .send({ name: `E2E Category ${Date.now()}` });
 
@@ -53,12 +53,12 @@ describe('Books API (e2e)', () => {
 
   describe('authentication', () => {
     it('rejects requests with no token', async () => {
-      await request(app.getHttpServer()).get('/api/v1/books').expect(401);
+      await request(app.getHttpServer()).get('/api/v1/library/books').expect(401);
     });
 
     it('rejects requests with an invalid token', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/books')
+        .get('/api/v1/library/books')
         .set('Authorization', 'Bearer not-a-real-token')
         .expect(401);
     });
@@ -67,14 +67,14 @@ describe('Books API (e2e)', () => {
   describe('authorization', () => {
     it('allows a student to read books (read is open to any authenticated role)', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/books')
+        .get('/api/v1/library/books')
         .set('Authorization', `Bearer ${studentToken}`)
         .expect(200);
     });
 
     it('prevents a student from creating a book', async () => {
       await request(app.getHttpServer())
-        .post('/api/v1/books')
+        .post('/api/v1/library/books')
         .set('Authorization', `Bearer ${studentToken}`)
         .send({
           qr_code: `${uniqueQr}-student-attempt`,
@@ -87,7 +87,7 @@ describe('Books API (e2e)', () => {
 
     it('allows a library user to create a book', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/v1/books')
+        .post('/api/v1/library/books')
         .set('Authorization', `Bearer ${libraryToken}`)
         .send({
           qr_code: uniqueQr,
@@ -103,7 +103,7 @@ describe('Books API (e2e)', () => {
 
     it('allows an admin to create a book', async () => {
       await request(app.getHttpServer())
-        .post('/api/v1/books')
+        .post('/api/v1/library/books')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           qr_code: `${uniqueQr}-admin`,
@@ -118,21 +118,21 @@ describe('Books API (e2e)', () => {
   describe('CRUD workflow', () => {
     it('reads the created book by id', async () => {
       await request(app.getHttpServer())
-        .get(`/api/v1/books/${createdBookId}`)
+        .get(`/api/v1/library/books/${createdBookId}`)
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(200);
     });
 
     it('lists books', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/books')
+        .get('/api/v1/library/books')
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(200);
     });
 
     it('updates the created book', async () => {
       await request(app.getHttpServer())
-        .patch(`/api/v1/books/${createdBookId}`)
+        .patch(`/api/v1/library/books/${createdBookId}`)
         .set('Authorization', `Bearer ${libraryToken}`)
         .send({ title: 'Computer Networks (2nd Edition)' })
         .expect(200);
@@ -140,7 +140,7 @@ describe('Books API (e2e)', () => {
 
     it('prevents a student from updating a book', async () => {
       await request(app.getHttpServer())
-        .patch(`/api/v1/books/${createdBookId}`)
+        .patch(`/api/v1/library/books/${createdBookId}`)
         .set('Authorization', `Bearer ${studentToken}`)
         .send({ title: 'Hacked title' })
         .expect(403);
@@ -148,7 +148,7 @@ describe('Books API (e2e)', () => {
 
     it('deletes the created book', async () => {
       await request(app.getHttpServer())
-        .delete(`/api/v1/books/${createdBookId}`)
+        .delete(`/api/v1/library/books/${createdBookId}`)
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(200);
     });
@@ -160,7 +160,7 @@ describe('Books API (e2e)', () => {
 
     beforeAll(async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/v1/books')
+        .post('/api/v1/library/books')
         .set('Authorization', `Bearer ${libraryToken}`)
         .send({
           qr_code: fuzzyQr,
@@ -175,20 +175,20 @@ describe('Books API (e2e)', () => {
 
     afterAll(async () => {
       await request(app.getHttpServer())
-        .delete(`/api/v1/books/${fuzzyBookId}`)
+        .delete(`/api/v1/library/books/${fuzzyBookId}`)
         .set('Authorization', `Bearer ${libraryToken}`);
     });
 
     it('rejects requests with no token', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/books/search')
+        .get('/api/v1/library/books/search')
         .query({ q: 'computer' })
         .expect(401);
     });
 
     it('returns a validation error for an empty query', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/books/search')
+        .get('/api/v1/library/books/search')
         .query({ q: '' })
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(400);
@@ -196,7 +196,7 @@ describe('Books API (e2e)', () => {
 
     it('returns a validation error for a query shorter than 2 characters', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/books/search')
+        .get('/api/v1/library/books/search')
         .query({ q: 'a' })
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(400);
@@ -204,7 +204,7 @@ describe('Books API (e2e)', () => {
 
     it('finds the book with a plain matching query', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/v1/books/search')
+        .get('/api/v1/library/books/search')
         .query({ q: 'computer' })
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(200);
@@ -215,7 +215,7 @@ describe('Books API (e2e)', () => {
 
     it('finds the book despite typos in the query', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/v1/books/search')
+        .get('/api/v1/library/books/search')
         .query({ q: 'comuter scince' })
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(200);
@@ -228,7 +228,7 @@ describe('Books API (e2e)', () => {
 
     it('returns an empty array for unrelated text', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/v1/books/search')
+        .get('/api/v1/library/books/search')
         .query({ q: 'zzzqqqxxxnomatch' })
         .set('Authorization', `Bearer ${libraryToken}`)
         .expect(200);

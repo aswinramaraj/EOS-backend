@@ -18,12 +18,17 @@ describe('BookCategoriesService', () => {
       findFirst: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      count: jest.fn(),
     },
     $queryRaw: jest.fn(),
+    $transaction: jest.fn(),
   };
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    mockPrismaService.$transaction.mockImplementation((arg: any) =>
+      Promise.all(arg),
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -83,27 +88,70 @@ describe('BookCategoriesService', () => {
   });
 
   describe('findAll', () => {
-    it('should return all categories ordered by name', async () => {
+    it('should return all categories ordered by name, paginated', async () => {
       const categories = [
         { id: 1, name: 'Fiction' },
         { id: 2, name: 'Science' },
       ];
       mockPrismaService.book_categories.findMany.mockResolvedValue(categories);
+      mockPrismaService.book_categories.count.mockResolvedValue(2);
 
       const result = await service.findAll();
 
       expect(mockPrismaService.book_categories.findMany).toHaveBeenCalledWith({
+        where: {},
         orderBy: { name: 'asc' },
+        skip: 0,
+        take: 20,
       });
-      expect(result).toEqual({ success: true, data: categories });
+      expect(result).toEqual({
+        success: true,
+        page: 1,
+        page_size: 20,
+        total: 2,
+        data: categories,
+      });
     });
 
     it('should return an empty list when no categories exist', async () => {
       mockPrismaService.book_categories.findMany.mockResolvedValue([]);
+      mockPrismaService.book_categories.count.mockResolvedValue(0);
 
       const result = await service.findAll();
 
-      expect(result).toEqual({ success: true, data: [] });
+      expect(result).toEqual({
+        success: true,
+        page: 1,
+        page_size: 20,
+        total: 0,
+        data: [],
+      });
+    });
+
+    it('should filter by q (case-insensitive substring on name)', async () => {
+      mockPrismaService.book_categories.findMany.mockResolvedValue([
+        { id: 2, name: 'Science' },
+      ]);
+      mockPrismaService.book_categories.count.mockResolvedValue(1);
+
+      await service.findAll({ q: 'sci' });
+
+      expect(mockPrismaService.book_categories.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { name: { contains: 'sci', mode: 'insensitive' } },
+        }),
+      );
+    });
+
+    it('should apply page/page_size to skip/take', async () => {
+      mockPrismaService.book_categories.findMany.mockResolvedValue([]);
+      mockPrismaService.book_categories.count.mockResolvedValue(0);
+
+      await service.findAll({ page: 2, page_size: 10 });
+
+      expect(mockPrismaService.book_categories.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 10, take: 10 }),
+      );
     });
   });
 

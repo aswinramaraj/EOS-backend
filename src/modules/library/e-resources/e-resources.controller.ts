@@ -19,7 +19,7 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { FuzzySearchDto } from 'src/common';
 
-@Controller('e-resources')
+@Controller('library/e-resources')
 export class EResourcesController {
   constructor(private readonly eResourcesService: EResourcesService) {}
 

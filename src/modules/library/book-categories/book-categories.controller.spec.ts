@@ -53,13 +53,20 @@ describe('BookCategoriesController', () => {
     expect(result).toBe(expected);
   });
 
-  it('findAll should call service.findAll and return its result', async () => {
-    const expected = { success: true, data: [{ id: 1, name: 'Fiction' }] };
+  it('findAll should call service.findAll with the query dto and return its result', async () => {
+    const query = { q: 'sci', page: 1, page_size: 20 };
+    const expected = {
+      success: true,
+      page: 1,
+      page_size: 20,
+      total: 1,
+      data: [{ id: 1, name: 'Fiction' }],
+    };
     mockBookCategoriesService.findAll.mockResolvedValue(expected);
 
-    const result = await controller.findAll();
+    const result = await controller.findAll(query);
 
-    expect(mockBookCategoriesService.findAll).toHaveBeenCalled();
+    expect(mockBookCategoriesService.findAll).toHaveBeenCalledWith(query);
     expect(result).toBe(expected);
   });
 
