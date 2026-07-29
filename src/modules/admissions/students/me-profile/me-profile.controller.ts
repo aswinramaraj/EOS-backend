@@ -24,6 +24,7 @@ import { CreateOdTeamDto } from './dto/create-od-team.dto';
 import { JoinOdTeamDto } from './dto/join-od-team.dto';
 import { CreateOdRequestDto } from './dto/create-od-request.dto';
 import { CreateHostelOutingDto } from './dto/create-hostel-outing.dto';
+import { GetHostelOutingsDto } from './dto/get-hostel-outings.dto';
 import { MeProfileService } from './me-profile.service';
 import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
@@ -332,5 +333,30 @@ export class MeController {
     @Body() dto: CreateHostelOutingDto,
   ) {
     return this.meHostelOutingsService.createHostelOuting(user.sub, dto);
+  }
+
+  /**
+   * GET /api/v1/me/hostel-outings?status=&page=&page_size=
+   *
+   * Self-scoped: student_id resolved from the JWT. Unlike the POST
+   * sibling, does NOT gate on hosteller status — see
+   * MeHostelOutingsService.getMyHostelOutings() for the rationale and the
+   * approved_by_warden/room_number resolution details.
+   *
+   * Error responses:
+   *  400 VALIDATION_ERROR   – status isn't a real enum value
+   *  401 UNAUTHORIZED       – missing/invalid JWT
+   *  403 FORBIDDEN          – authenticated but not a student
+   *  404 STUDENT_NOT_FOUND  – authenticated user has no linked student record
+   *  500 INTERNAL_ERROR     – unexpected server failure
+   */
+  @Get('hostel-outings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  getHostelOutings(
+    @CurrentUser() user: JwtPayload,
+    @Query() dto: GetHostelOutingsDto,
+  ) {
+    return this.meHostelOutingsService.getMyHostelOutings(user.sub, dto);
   }
 }

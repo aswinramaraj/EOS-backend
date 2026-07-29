@@ -38,6 +38,7 @@ describe('MeController', () => {
   };
   const meHostelOutingsService = {
     createHostelOuting: jest.fn(),
+    getMyHostelOutings: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -260,6 +261,27 @@ describe('MeController', () => {
     );
 
     expect(meHostelOutingsService.createHostelOuting).toHaveBeenCalledWith(
+      7,
+      dto,
+    );
+  });
+
+  it('restricts getHostelOutings() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const target = controller.getHostelOutings;
+    const roles = reflector.get<string[]>(ROLES_KEY, target);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates getHostelOutings() to MeHostelOutingsService', () => {
+    const dto = { status: 'pending' as const };
+    void controller.getHostelOutings(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      dto,
+    );
+
+    expect(meHostelOutingsService.getMyHostelOutings).toHaveBeenCalledWith(
       7,
       dto,
     );

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateHostelOutingDto } from './dto/create-hostel-outing.dto';
+import { GetHostelOutingsDto } from './dto/get-hostel-outings.dto';
 
 function startOfToday(): Date {
   const now = new Date();
@@ -144,6 +145,129 @@ export class MeHostelOutingsService {
       status: outing.status,
       room_number: hostelMapping.hostel_rooms.room_number,
     };
+  }
+
+  /**
+   * GET /me/hostel-outings?status=&page=&page_size=
+   *
+   * Self-scoped: student_id resolved from the JWT. Unlike the POST sibling,
+   * this endpoint does NOT gate on hosteller status (per
+   * todo.md/15-GET-me-hostel-outings.md §3 step 7 / §8) — a day scholar,
+   * or a hosteller whose mapping has since been removed, simply gets an
+   * empty or historical list, never a 422. There's nothing to protect by
+   * blocking a read of "your own rows, of which there may be zero."
+   *
+   * `approved_by_warden` resolves to `users.email` (not a name — `users`
+   * has no name column, same gap already documented for GET /me/leaves'
+   * `approved_by_hod`), null until a warden acts (no such endpoint exists
+   * yet anywhere in the reviewed schema).
+   *
+   * `room_number` reflects the student's CURRENT student_hostel_mapping at
+   * read time, not a per-request historical snapshot — the schema has no
+   * versioned room-assignment history to draw from instead (documented in
+   * the spec's own Business Rules and Known Limitations).
+   *
+   * Error cases:
+   *  400 VALIDATION_ERROR  – status isn't a real enum value
+   *  404 STUDENT_NOT_FOUND – authenticated user has no linked student
+   *                          record (spec doesn't list this code, kept
+   *                          for consistency with every sibling /me/*
+   *                          endpoint)
+   *  500 INTERNAL_ERROR    – unexpected DB failure
+   */
+  async getMyHostelOutings(userId: number, dto: GetHostelOutingsDto) {
+    const student = await this.prisma.students.findUnique({
+      where: { user_id: userId },
+      select: { id: true },
+    });
+    if (!student) {
+      throw new NotFoundException({
+        message: 'Student profile not found for this account',
+        errorCode: 'STUDENT_NOT_FOUND',
+      });
+    }
+
+    const page = dto.page ?? 1;
+    const pageSize = dto.page_size ?? 20;
+
+    const [total, rows] = await this.fetchOutings(
+      userId,
+      student.id,
+      dto.status,
+      page,
+      pageSize,
+    );
+
+    return {
+      data: rows.map((row) => ({
+        id: row.id,
+        from_date: toDateOnly(row.from_date),
+        to_date: toDateOnly(row.to_date),
+        start_time: toTimeOnly(row.start_time),
+        return_time: row.return_time ? toTimeOnly(row.return_time) : null,
+        reason: row.reason,
+        status: row.status,
+        approved_by_warden: row.users?.email ?? null,
+        room_number:
+          row.students.student_hostel_mapping?.hostel_rooms.room_number ?? null,
+        created_at: row.created_at.toISOString(),
+      })),
+      page,
+      page_size: pageSize,
+      total,
+    };
+  }
+
+  private async fetchOutings(
+    userId: number,
+    studentId: number,
+    status: GetHostelOutingsDto['status'],
+    page: number,
+    pageSize: number,
+  ) {
+    const where = {
+      student_id: studentId,
+      ...(status !== undefined ? { status } : {}),
+    };
+
+    try {
+      return await Promise.all([
+        this.prisma.hostel_outings.count({ where }),
+        this.prisma.hostel_outings.findMany({
+          where,
+          select: {
+            id: true,
+            from_date: true,
+            to_date: true,
+            start_time: true,
+            return_time: true,
+            reason: true,
+            status: true,
+            created_at: true,
+            users: { select: { email: true } },
+            students: {
+              select: {
+                student_hostel_mapping: {
+                  select: { hostel_rooms: { select: { room_number: true } } },
+                },
+              },
+            },
+          },
+          orderBy: { created_at: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+    } catch (err) {
+      this.logger.error(
+        `Failed to fetch hostel outings for user ${userId}`,
+        err,
+      );
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
   }
 
   private async insertOuting(
