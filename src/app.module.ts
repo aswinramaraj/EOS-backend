@@ -19,6 +19,8 @@ import { StudentsModule } from './modules/admissions/students/students.module';
 import { AnnouncementsModule } from './modules/announcements/announcements/announcements.module';
 import { ExamsModule } from './modules/exams/exams/exams.module';
 import { ExamTypesModule } from './modules/exams/exam-types/exam-types.module';
+import { ExamSubjectMappingModule } from './modules/exams/exam-subject-mapping/exam-subject-mapping.module';
+import { ExamTimetableModule } from './modules/exams/exam-timetable/exam-timetable.module';
 import { HallPlansModule } from './modules/exams/hall-plans/hall-plans.module';
 import { InvigilationModule } from './modules/exams/invigilation/invigilation.module';
 import { MarksModule } from './modules/exams/marks/marks.module';
@@ -61,7 +63,7 @@ import { FeedbackModule } from './modules/feedback/feedback/feedback.module';
     // Login endpoint overrides this to 5 attempts per 60 seconds (see AuthController)
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
 
-    AuthModule, AcademicCalendarModule, BatchesModule, CoursesModule, ClassesModule, DepartmentsModule, SubjectsModule, BonafideModule, CertificatesModule, OdModule, SoaApplicationsModule, StudentLeavesModule, StudentsModule, AnnouncementsModule, ExamsModule, ExamTypesModule, HallPlansModule, InvigilationModule, MarksModule, ResultsModule, RevaluationModule, AppraisalModule, AttendanceModule, FacultyLeavesModule, FacultyMappingModule, FacultyModule, HrPayrollModule, LessonPlansModule, LmsNotesModule, MediaRequestsModule, TimetableModule, BillingModule, EducationLoanModule, FeeStructureModule, GateLedgerModule, HostelModule, TransportModule, BooksModule, BorrowRecordsModule, EResourcesModule, CompaniesModule, DrivesModule, StudentProfilesModule, GrnModule, PurchaseOrdersModule, ServiceOrdersModule, VendorsModule, VenuesModule, NotificationsModule, FeedbackModule,
+    AuthModule, AcademicCalendarModule, BatchesModule, CoursesModule, ClassesModule, DepartmentsModule, SubjectsModule, BonafideModule, CertificatesModule, OdModule, SoaApplicationsModule, StudentLeavesModule, StudentsModule, AnnouncementsModule, ExamsModule, ExamTypesModule,ExamSubjectMappingModule,ExamTimetableModule, HallPlansModule, InvigilationModule, MarksModule, ResultsModule, RevaluationModule, AppraisalModule, AttendanceModule, FacultyLeavesModule, FacultyMappingModule, FacultyModule, HrPayrollModule, LessonPlansModule, LmsNotesModule, MediaRequestsModule, TimetableModule, BillingModule, EducationLoanModule, FeeStructureModule, GateLedgerModule, HostelModule, TransportModule, BooksModule, BorrowRecordsModule, EResourcesModule, CompaniesModule, DrivesModule, StudentProfilesModule, GrnModule, PurchaseOrdersModule, ServiceOrdersModule, VendorsModule, VenuesModule, NotificationsModule, FeedbackModule,
   ],
   controllers: [AppController],
   providers: [
