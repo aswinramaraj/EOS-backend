@@ -75,7 +75,41 @@ async function main() {
     console.log(`   ✅  ${email.padEnd(40)} id=${u.id}`);
   }
 
-  // 3. Print credentials table
+  // 3. Give the HoD test user a faculty row.
+  // Several HoD-only endpoints (e.g. Class Mentors' department-scope check)
+  // resolve the caller's own department via faculty.department_id — there is
+  // no other column anywhere in the schema that records which department a
+  // user belongs to. Without this row, those checks 404 with "Faculty
+  // profile not found for the authenticated user" even for a valid HoD JWT.
+  console.log('\n🏫  Ensuring hod@eos.test has a faculty profile...');
+
+  const hodUser = await prisma.users.findUnique({ where: { email: 'hod@eos.test' } });
+  const existingHodFaculty = hodUser
+    ? await prisma.faculty.findUnique({ where: { user_id: hodUser.id } })
+    : null;
+
+  if (existingHodFaculty) {
+    console.log(`   ✅  Already exists: faculty.id=${existingHodFaculty.id}, department_id=${existingHodFaculty.department_id}`);
+  } else if (hodUser) {
+    const firstDepartment = await prisma.departments.findFirst({ orderBy: { id: 'asc' } });
+    if (firstDepartment) {
+      const hodFaculty = await prisma.faculty.create({
+        data: {
+          user_id: hodUser.id,
+          first_name: 'Test',
+          last_name: 'HoD',
+          designation: 'Head of Department',
+          department_id: firstDepartment.id,
+          status: 'active',
+        },
+      });
+      console.log(`   ✅  Created: faculty.id=${hodFaculty.id}, department_id=${hodFaculty.department_id}`);
+    } else {
+      console.log('   ⚠️  No departments exist yet — skipped (run this seed again after departments are created).');
+    }
+  }
+
+  // 4. Print credentials table
   const line = '═'.repeat(62);
   console.log(`\n${line}`);
   console.log('  POSTMAN TEST CREDENTIALS  (password: EOS@test123)');

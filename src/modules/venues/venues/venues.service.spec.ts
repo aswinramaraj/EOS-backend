@@ -1,4 +1,10 @@
+jest.mock('../../../../generated/prisma/client', () => ({
+  PrismaClient: class {},
+}));
+jest.mock('@prisma/adapter-pg', () => ({ PrismaPg: class {} }));
+
 import { Test, TestingModule } from '@nestjs/testing';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { VenuesService } from './venues.service';
 
 describe('VenuesService', () => {
@@ -6,7 +12,30 @@ describe('VenuesService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [VenuesService],
+      providers: [
+        VenuesService,
+        {
+          provide: PrismaService,
+          useValue: {
+            venues: {
+              create: jest.fn(),
+              findUnique: jest.fn(),
+              findMany: jest.fn(),
+              update: jest.fn(),
+              delete: jest.fn(),
+              count: jest.fn(),
+            },
+            venue_bookings: {
+              create: jest.fn(),
+              findUnique: jest.fn(),
+              findMany: jest.fn(),
+              update: jest.fn(),
+              count: jest.fn(),
+            },
+            $transaction: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<VenuesService>(VenuesService);
