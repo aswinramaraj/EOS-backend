@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateBonafideRequestDto } from './dto/create-bonafide-request.dto';
+import { GetBonafideRequestsDto } from './dto/get-bonafide-requests.dto';
 
 @Injectable()
 export class MeBonafideRequestsService {
@@ -94,6 +95,110 @@ export class MeBonafideRequestsService {
       issued_at: request.issued_at ? request.issued_at.toISOString() : null,
       file_url: request.file_url,
     };
+  }
+
+  /**
+   * GET /me/bonafide-requests?status=&page=&page_size=
+   *
+   * Self-scoped: student_id resolved from the JWT. No gating rule to
+   * consider on the read side (unlike GET /me/hostel-outings's asymmetry
+   * with its POST sibling) — every row already belongs to the caller by
+   * construction, since POST /me/bonafide-requests has no equivalent of a
+   * hosteller-only restriction.
+   *
+   * Joins to bonafide_reasons with an INNER join, not a LEFT join —
+   * reason_id is a required (non-nullable) column on bonafide_requests,
+   * unlike hostel_outings.approved_by_warden_user_id, so there's no
+   * "missing reason" case to handle.
+   *
+   * Error cases:
+   *  400 VALIDATION_ERROR  – status isn't a real enum value
+   *  404 STUDENT_NOT_FOUND – authenticated user has no linked student
+   *                          record (spec doesn't list this code, kept
+   *                          for consistency with every sibling /me/*
+   *                          endpoint)
+   *  500 INTERNAL_ERROR    – unexpected DB failure
+   */
+  async getMyBonafideRequests(userId: number, dto: GetBonafideRequestsDto) {
+    const student = await this.prisma.students.findUnique({
+      where: { user_id: userId },
+      select: { id: true },
+    });
+    if (!student) {
+      throw new NotFoundException({
+        message: 'Student profile not found for this account',
+        errorCode: 'STUDENT_NOT_FOUND',
+      });
+    }
+
+    const page = dto.page ?? 1;
+    const pageSize = dto.page_size ?? 20;
+
+    const [total, rows] = await this.fetchRequests(
+      userId,
+      student.id,
+      dto.status,
+      page,
+      pageSize,
+    );
+
+    return {
+      data: rows.map((row) => ({
+        id: row.id,
+        reason_id: row.reason_id,
+        reason_text: row.bonafide_reasons.reason_text,
+        status: row.status,
+        requested_at: row.requested_at.toISOString(),
+        issued_at: row.issued_at ? row.issued_at.toISOString() : null,
+        file_url: row.file_url,
+      })),
+      page,
+      page_size: pageSize,
+      total,
+    };
+  }
+
+  private async fetchRequests(
+    userId: number,
+    studentId: number,
+    status: GetBonafideRequestsDto['status'],
+    page: number,
+    pageSize: number,
+  ) {
+    const where = {
+      student_id: studentId,
+      ...(status !== undefined ? { status } : {}),
+    };
+
+    try {
+      return await Promise.all([
+        this.prisma.bonafide_requests.count({ where }),
+        this.prisma.bonafide_requests.findMany({
+          where,
+          select: {
+            id: true,
+            reason_id: true,
+            status: true,
+            requested_at: true,
+            issued_at: true,
+            file_url: true,
+            bonafide_reasons: { select: { reason_text: true } },
+          },
+          orderBy: { requested_at: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+    } catch (err) {
+      this.logger.error(
+        `Failed to fetch bonafide requests for user ${userId}`,
+        err,
+      );
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
   }
 
   private async fetchReason(userId: number, reasonId: number) {

@@ -11,6 +11,7 @@ import { MeOdTeamsService } from './me-od-teams.service';
 import { MeOdRequestsService } from './me-od-requests.service';
 import { MeHostelOutingsService } from './me-hostel-outings.service';
 import { MeBonafideRequestsService } from './me-bonafide-requests.service';
+import { MeProjectsService } from './me-projects.service';
 import { student_leave_status_enum } from 'generated/prisma/client';
 
 describe('MeController', () => {
@@ -43,6 +44,11 @@ describe('MeController', () => {
   };
   const meBonafideRequestsService = {
     createBonafideRequest: jest.fn(),
+    getMyBonafideRequests: jest.fn(),
+  };
+  const meProjectsService = {
+    createProject: jest.fn(),
+    getMyProjects: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -60,6 +66,7 @@ describe('MeController', () => {
           provide: MeBonafideRequestsService,
           useValue: meBonafideRequestsService,
         },
+        { provide: MeProjectsService, useValue: meProjectsService },
       ],
     }).compile();
 
@@ -313,5 +320,61 @@ describe('MeController', () => {
     expect(
       meBonafideRequestsService.createBonafideRequest,
     ).toHaveBeenCalledWith(7, dto);
+  });
+
+  it('restricts getBonafideRequests() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const target = controller.getBonafideRequests;
+    const roles = reflector.get<string[]>(ROLES_KEY, target);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates getBonafideRequests() to MeBonafideRequestsService', () => {
+    const dto = { status: 'pending' as const };
+    void controller.getBonafideRequests(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      dto,
+    );
+
+    expect(
+      meBonafideRequestsService.getMyBonafideRequests,
+    ).toHaveBeenCalledWith(7, dto);
+  });
+
+  it('restricts createProject() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const target = controller.createProject;
+    const roles = reflector.get<string[]>(ROLES_KEY, target);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates createProject() to MeProjectsService', () => {
+    const dto = { title: 'Real-Time OD Attendance Tracker' };
+    void controller.createProject(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      dto,
+    );
+
+    expect(meProjectsService.createProject).toHaveBeenCalledWith(7, dto);
+  });
+
+  it('restricts getProjects() to the student role', () => {
+    const reflector = new Reflector();
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading decorator metadata off the method, never invoking it detached from `controller`
+    const target = controller.getProjects;
+    const roles = reflector.get<string[]>(ROLES_KEY, target);
+    expect(roles).toEqual([ROLES.STUDENT]);
+  });
+
+  it('resolves student_id from the JWT and delegates getProjects() to MeProjectsService', () => {
+    const dto = { page: 1, page_size: 20 };
+    void controller.getProjects(
+      { sub: 7, email: 'a@b.com', role: 'student', roleId: 4 },
+      dto,
+    );
+
+    expect(meProjectsService.getMyProjects).toHaveBeenCalledWith(7, dto);
   });
 });

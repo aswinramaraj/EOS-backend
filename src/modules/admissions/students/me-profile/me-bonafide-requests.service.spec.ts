@@ -7,14 +7,22 @@ describe('MeBonafideRequestsService', () => {
   let prisma: {
     students: { findUnique: jest.Mock };
     bonafide_reasons: { findUnique: jest.Mock };
-    bonafide_requests: { create: jest.Mock };
+    bonafide_requests: {
+      create: jest.Mock;
+      count: jest.Mock;
+      findMany: jest.Mock;
+    };
   };
 
   beforeEach(async () => {
     prisma = {
       students: { findUnique: jest.fn() },
       bonafide_reasons: { findUnique: jest.fn() },
-      bonafide_requests: { create: jest.fn() },
+      bonafide_requests: {
+        create: jest.fn(),
+        count: jest.fn(),
+        findMany: jest.fn(),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -155,5 +163,121 @@ describe('MeBonafideRequestsService', () => {
       response: { errorCode: 'INTERNAL_ERROR' },
     });
     expect(prisma.bonafide_requests.create).not.toHaveBeenCalled();
+  });
+
+  describe('getMyBonafideRequests', () => {
+    it('resolves reason_text for every row and handles nulls', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.bonafide_requests.count.mockResolvedValue(2);
+      prisma.bonafide_requests.findMany.mockResolvedValue([
+        {
+          id: 2,
+          reason_id: 2,
+          status: 'pending',
+          requested_at: new Date('2026-07-29T14:07:11.155Z'),
+          issued_at: null,
+          file_url: null,
+          bonafide_reasons: { reason_text: 'For Passport Application' },
+        },
+        {
+          id: 1,
+          reason_id: 1,
+          status: 'issued',
+          requested_at: new Date('2026-07-26T10:00:00.000Z'),
+          issued_at: new Date('2026-07-27T09:15:00.000Z'),
+          file_url: 'https://storage.example.com/bonafide/214.pdf',
+          bonafide_reasons: { reason_text: 'For Bank Loan' },
+        },
+      ]);
+
+      const result = await service.getMyBonafideRequests(103, {});
+
+      expect(prisma.students.findUnique).toHaveBeenCalledWith({
+        where: { user_id: 103 },
+        select: { id: true },
+      });
+      expect(result.total).toBe(2);
+      expect(result.page).toBe(1);
+      expect(result.page_size).toBe(20);
+      expect(result.data[0]).toEqual({
+        id: 2,
+        reason_id: 2,
+        reason_text: 'For Passport Application',
+        status: 'pending',
+        requested_at: '2026-07-29T14:07:11.155Z',
+        issued_at: null,
+        file_url: null,
+      });
+      expect(result.data[1]).toEqual({
+        id: 1,
+        reason_id: 1,
+        reason_text: 'For Bank Loan',
+        status: 'issued',
+        requested_at: '2026-07-26T10:00:00.000Z',
+        issued_at: '2026-07-27T09:15:00.000Z',
+        file_url: 'https://storage.example.com/bonafide/214.pdf',
+      });
+    });
+
+    it('filters by status when provided', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.bonafide_requests.count.mockResolvedValue(0);
+      prisma.bonafide_requests.findMany.mockResolvedValue([]);
+
+      await service.getMyBonafideRequests(103, { status: 'issued' });
+
+      const [countArgs] = prisma.bonafide_requests.count.mock.calls[0] as [
+        { where: Record<string, unknown> },
+      ];
+      expect(countArgs.where).toEqual({ student_id: 8, status: 'issued' });
+    });
+
+    it('applies pagination (page/page_size -> skip/take)', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.bonafide_requests.count.mockResolvedValue(50);
+      prisma.bonafide_requests.findMany.mockResolvedValue([]);
+
+      await service.getMyBonafideRequests(103, { page: 3, page_size: 10 });
+
+      const [findManyArgs] = prisma.bonafide_requests.findMany.mock
+        .calls[0] as [{ skip: number; take: number }];
+      expect(findManyArgs.skip).toBe(20);
+      expect(findManyArgs.take).toBe(10);
+    });
+
+    it('returns an empty list (not an error) when the student has no bonafide requests', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.bonafide_requests.count.mockResolvedValue(0);
+      prisma.bonafide_requests.findMany.mockResolvedValue([]);
+
+      const result = await service.getMyBonafideRequests(103, {});
+
+      expect(result).toEqual({ data: [], page: 1, page_size: 20, total: 0 });
+    });
+
+    it('throws 404 STUDENT_NOT_FOUND when the JWT user has no linked student record', async () => {
+      prisma.students.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getMyBonafideRequests(999, {}),
+      ).rejects.toMatchObject({
+        status: 404,
+        response: { errorCode: 'STUDENT_NOT_FOUND' },
+      });
+    });
+
+    it('wraps a DB failure as 500 INTERNAL_ERROR', async () => {
+      prisma.students.findUnique.mockResolvedValue({ id: 8 });
+      prisma.bonafide_requests.count.mockRejectedValue(
+        new Error('connection lost'),
+      );
+
+      await expect(
+        service.getMyBonafideRequests(103, {}),
+      ).rejects.toMatchObject({
+        status: 500,
+        response: { errorCode: 'INTERNAL_ERROR' },
+      });
+    });
   });
 });

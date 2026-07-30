@@ -26,6 +26,9 @@ import { CreateOdRequestDto } from './dto/create-od-request.dto';
 import { CreateHostelOutingDto } from './dto/create-hostel-outing.dto';
 import { GetHostelOutingsDto } from './dto/get-hostel-outings.dto';
 import { CreateBonafideRequestDto } from './dto/create-bonafide-request.dto';
+import { GetBonafideRequestsDto } from './dto/get-bonafide-requests.dto';
+import { CreateProjectDto } from './dto/create-project.dto';
+import { GetProjectsDto } from './dto/get-projects.dto';
 import { MeProfileService } from './me-profile.service';
 import { MeAttendanceService } from './me-attendance.service';
 import { MeLeavesService } from './me-leaves.service';
@@ -34,6 +37,7 @@ import { MeOdTeamsService } from './me-od-teams.service';
 import { MeOdRequestsService } from './me-od-requests.service';
 import { MeHostelOutingsService } from './me-hostel-outings.service';
 import { MeBonafideRequestsService } from './me-bonafide-requests.service';
+import { MeProjectsService } from './me-projects.service';
 
 @Controller('me')
 export class MeController {
@@ -46,6 +50,7 @@ export class MeController {
     private readonly meOdRequestsService: MeOdRequestsService,
     private readonly meHostelOutingsService: MeHostelOutingsService,
     private readonly meBonafideRequestsService: MeBonafideRequestsService,
+    private readonly meProjectsService: MeProjectsService,
   ) {}
 
   /**
@@ -388,5 +393,79 @@ export class MeController {
     @Body() dto: CreateBonafideRequestDto,
   ) {
     return this.meBonafideRequestsService.createBonafideRequest(user.sub, dto);
+  }
+
+  /**
+   * GET /api/v1/me/bonafide-requests?status=&page=&page_size=
+   *
+   * Self-scoped: student_id resolved from the JWT. No gating rule to
+   * consider on the read side — see
+   * MeBonafideRequestsService.getMyBonafideRequests() for the
+   * reason_text join rationale.
+   *
+   * Error responses:
+   *  400 VALIDATION_ERROR  – status isn't a real enum value
+   *  401 UNAUTHORIZED      – missing/invalid JWT
+   *  403 FORBIDDEN         – authenticated but not a student
+   *  404 STUDENT_NOT_FOUND – authenticated user has no linked student record
+   *  500 INTERNAL_ERROR    – unexpected server failure
+   */
+  @Get('bonafide-requests')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  getBonafideRequests(
+    @CurrentUser() user: JwtPayload,
+    @Query() dto: GetBonafideRequestsDto,
+  ) {
+    return this.meBonafideRequestsService.getMyBonafideRequests(user.sub, dto);
+  }
+
+  /**
+   * POST /api/v1/me/projects
+   *
+   * Self-scoped: student_id resolved from the JWT. See
+   * MeProjectsService.createProject() for the mentor_faculty_name
+   * enrichment rationale.
+   *
+   * Error responses:
+   *  400 VALIDATION_ERROR  – title missing/empty, or mentor_faculty_id not
+   *                          a positive integer
+   *  401 UNAUTHORIZED      – missing/invalid JWT
+   *  403 FORBIDDEN         – authenticated but not a student
+   *  404 STUDENT_NOT_FOUND – authenticated user has no linked student record
+   *  404 FACULTY_NOT_FOUND – mentor_faculty_id doesn't reference an
+   *                          existing faculty row
+   *  500 INTERNAL_ERROR    – unexpected server failure
+   */
+  @Post('projects')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  createProject(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateProjectDto,
+  ) {
+    return this.meProjectsService.createProject(user.sub, dto);
+  }
+
+  /**
+   * GET /api/v1/me/projects?page=&page_size=
+   *
+   * Self-scoped: student_id resolved from the JWT. No status filter (no
+   * such column exists on student_projects) — see
+   * todo.md/19-GET-me-projects.md (self-authored) and
+   * MeProjectsService.getMyProjects() for the id-DESC ordering rationale
+   * (student_projects has no created_at column).
+   *
+   * Error responses:
+   *  401 UNAUTHORIZED      – missing/invalid JWT
+   *  403 FORBIDDEN         – authenticated but not a student
+   *  404 STUDENT_NOT_FOUND – authenticated user has no linked student record
+   *  500 INTERNAL_ERROR    – unexpected server failure
+   */
+  @Get('projects')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.STUDENT)
+  getProjects(@CurrentUser() user: JwtPayload, @Query() dto: GetProjectsDto) {
+    return this.meProjectsService.getMyProjects(user.sub, dto);
   }
 }
