@@ -1,4 +1,27 @@
 import { ValidationPipe, BadRequestException } from '@nestjs/common';
+import type { ValidationError } from '@nestjs/common';
+
+/**
+ * Recursively collects constraint messages from a class-validator error
+ * tree. Needed because @ValidateNested (e.g. UpdateProfileDto.addresses)
+ * produces a top-level error with an empty `constraints` and the actual
+ * failures nested under `children` — reading only the top level silently
+ * dropped every nested-array validation message (confirmed live: a failing
+ * `addresses[].address_line` check returned `"message": []`, a 400 with no
+ * indication of what was wrong).
+ */
+function collectConstraints(errors: ValidationError[]): string[] {
+  const messages: string[] = [];
+  for (const error of errors) {
+    if (error.constraints) {
+      messages.push(...Object.values(error.constraints));
+    }
+    if (error.children?.length) {
+      messages.push(...collectConstraints(error.children));
+    }
+  }
+  return messages;
+}
 
 /**
  * Global validation pipe instance — applied in main.ts via app.useGlobalPipes().
@@ -17,13 +40,10 @@ export const globalValidationPipe = new ValidationPipe({
     enableImplicitConversion: false,
   },
   exceptionFactory: (errors) => {
-    // Flatten class-validator errors into a simple string array
-    const messages = errors.flatMap((e) =>
-      e.constraints ? Object.values(e.constraints) : [],
-    );
+    const messages = collectConstraints(errors);
 
     return new BadRequestException({
-      message:   messages.length === 1 ? messages[0] : messages,
+      message: messages.length === 1 ? messages[0] : messages,
       errorCode: 'VALIDATION_ERROR',
     });
   },

@@ -1,10 +1,11 @@
 import {
-  ConflictException,
-  ForbiddenException,
   Injectable,
-  Logger,
+  ConflictException,
   NotFoundException,
+  InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
+
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
@@ -33,214 +34,267 @@ export class ClassesService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  create(createClassDto: CreateClassDto) {
-    void createClassDto;
-    return 'This action adds a new class';
-  }
+  async create(createClassDto: CreateClassDto) {
+    const { batch_id, department_id, course_id, section, current_semester } =
+      createClassDto;
 
-  findAll() {
-    return `This action returns all classes`;
-  }
+    const batch = await this.prisma.batches.findUnique({
+      where: { id: batch_id },
+    });
 
-  findOne(id: number) {
-    return `This action returns a #${id} class`;
-  }
+    if (!batch) {
+      throw new NotFoundException({
+        message: 'Batch not found',
+        errorCode: 'BATCH_NOT_FOUND',
+      });
+    }
 
-  update(id: number, updateClassDto: UpdateClassDto) {
-    void updateClassDto;
-    return `This action updates a #${id} class`;
-  }
+    const department = await this.prisma.departments.findUnique({
+      where: { id: department_id },
+    });
 
-  remove(id: number) {
-    return `This action removes a #${id} class`;
-  }
+    if (!department) {
+      throw new NotFoundException({
+        message: 'Department not found',
+        errorCode: 'DEPARTMENT_NOT_FOUND',
+      });
+    }
 
-  /**
-   * POST /classes/:id/mentor (HoD only, own department).
-   *
-   * workflow.md: "HoD assigns the class with a respective faculty as
-   * Mentor." class_mentors has @@unique([class_id, academic_year]) — the DB
-   * itself enforces one mentor per class per year, so a duplicate create
-   * surfaces as a real P2002, translated here to a friendly 409. No
-   * cross-department restriction on the faculty side — neither schema nor
-   * workflow.md requires the mentor to belong to the same department as
-   * the class.
-   */
-  async assignMentor(classId: number, dto: AssignMentorDto, userId: number) {
-    const hod = await this.resolveFacultyByUserId(userId);
-    await this.assertClassInDepartment(classId, hod.department_id);
-    await this.assertFacultyExists(dto.faculty_id);
+    const course = await this.prisma.courses.findUnique({
+      where: { id: course_id },
+    });
+
+    if (!course) {
+      throw new NotFoundException({
+        message: 'Course not found',
+        errorCode: 'COURSE_NOT_FOUND',
+      });
+    }
+
+    if (course.department_id !== department_id) {
+      throw new ConflictException({
+        message:
+          'The selected course does not belong to the selected department',
+        errorCode: 'COURSE_DEPARTMENT_MISMATCH',
+      });
+    }
+
+    const existing = await this.prisma.classes.findFirst({
+      where: {
+        batch_id,
+        department_id,
+        course_id,
+        section,
+      },
+    });
+
+    if (existing) {
+      throw new ConflictException({
+        message:
+          'A class with this batch, department, course, and section already exists',
+        errorCode: 'CLASS_ALREADY_EXISTS',
+      });
+    }
 
     try {
-      const mentor = await this.prisma.class_mentors.create({
+      return await this.prisma.classes.create({
         data: {
-          class_id: classId,
-          faculty_id: dto.faculty_id,
-          academic_year: dto.academic_year,
-          assigned_by_user_id: userId,
+          batch_id,
+          department_id,
+          course_id,
+          section,
+          current_semester,
         },
-        select: MENTOR_SELECT,
       });
+    } catch (error: any) {
+      this.logger.error('DB error while creating class', error);
 
-      this.logger.log(
-        `Class mentor assigned: class=${classId} faculty=${dto.faculty_id} year=${dto.academic_year}`,
-      );
-      return mentor;
-    } catch (err: unknown) {
-      if (prismaErrorCode(err) === 'P2002') {
+      if (error.code === 'P2002') {
         throw new ConflictException({
           message:
-            'This class already has a mentor assigned for this academic year',
-          errorCode: 'MENTOR_ALREADY_ASSIGNED',
+            'A class with this batch, department, course, and section already exists',
+          errorCode: 'CLASS_ALREADY_EXISTS',
         });
       }
-      throw err;
-    }
-  }
 
-  /**
-   * PATCH /classes/:id/mentor (HoD only, own department).
-   * Reassignment is a distinct action from initial assignment — it targets
-   * the existing (class_id, academic_year) row rather than creating a new
-   * one, and 404s if that row doesn't exist yet (use POST first).
-   */
-  async reassignMentor(classId: number, dto: AssignMentorDto, userId: number) {
-    const hod = await this.resolveFacultyByUserId(userId);
-    await this.assertClassInDepartment(classId, hod.department_id);
-    await this.assertFacultyExists(dto.faculty_id);
-
-    try {
-      const mentor = await this.prisma.class_mentors.update({
-        where: {
-          class_id_academic_year: {
-            class_id: classId,
-            academic_year: dto.academic_year,
-          },
-        },
-        data: { faculty_id: dto.faculty_id, assigned_by_user_id: userId },
-        select: MENTOR_SELECT,
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
       });
-
-      this.logger.log(
-        `Class mentor reassigned: class=${classId} faculty=${dto.faculty_id} year=${dto.academic_year}`,
-      );
-      return mentor;
-    } catch (err: unknown) {
-      if (prismaErrorCode(err) === 'P2025') {
-        throw new NotFoundException({
-          message:
-            'No mentor assignment exists for this class in that academic year',
-          errorCode: 'MENTOR_NOT_ASSIGNED',
-        });
-      }
-      throw err;
     }
   }
 
-  /**
-   * GET /classes/:id/mentor (Admin/HoD/Faculty).
-   * `academic_year` omitted returns the full assignment history — the
-   * schema has no "current academic year" flag anywhere, so there's no
-   * column to default against.
-   */
-  async getMentor(classId: number, academicYear?: string) {
-    await this.assertClassExists(classId);
 
-    return this.prisma.class_mentors.findMany({
+  async findAll() {
+    try {
+      return await this.prisma.classes.findMany();
+    } catch (error: any) {
+      this.logger.error('DB error while fetching classes', error);
+
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+
+  async findOne(id: number) {
+    const classRecord = await this.prisma.classes.findUnique({
+      where: { id },
+    });
+
+    if (!classRecord) {
+      throw new NotFoundException({
+        message: 'Class not found',
+        errorCode: 'CLASS_NOT_FOUND',
+      });
+    }
+
+    return classRecord;
+  }
+
+
+  async update(id: number, updateClassDto: UpdateClassDto) {
+
+    const existing = await this.prisma.classes.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException({
+        message: 'Class not found',
+        errorCode: 'CLASS_NOT_FOUND',
+      });
+    }
+
+
+    const batch_id =
+      updateClassDto.batch_id ?? existing.batch_id;
+
+    const department_id =
+      updateClassDto.department_id ?? existing.department_id;
+
+    const course_id =
+      updateClassDto.course_id ?? existing.course_id;
+
+    const section =
+      updateClassDto.section ?? existing.section;
+
+
+    const course = await this.prisma.courses.findUnique({
+      where: { id: course_id },
+    });
+
+
+    if (!course) {
+      throw new NotFoundException({
+        message: 'Course not found',
+        errorCode: 'COURSE_NOT_FOUND',
+      });
+    }
+
+
+    if (course.department_id !== department_id) {
+      throw new ConflictException({
+        message:
+          'The selected course does not belong to the selected department',
+        errorCode: 'COURSE_DEPARTMENT_MISMATCH',
+      });
+    }
+
+
+    const duplicate = await this.prisma.classes.findFirst({
       where: {
-        class_id: classId,
-        ...(academicYear !== undefined && { academic_year: academicYear }),
+        id: {
+          not: id,
+        },
+        batch_id,
+        department_id,
+        course_id,
+        section,
       },
-      orderBy: { academic_year: 'desc' },
-      select: MENTOR_SELECT,
     });
-  }
 
-  /** DELETE /classes/:id/mentor/:academic_year (HoD only, own department). Hard delete. */
-  async removeMentor(classId: number, academicYear: string, userId: number) {
-    const hod = await this.resolveFacultyByUserId(userId);
-    await this.assertClassInDepartment(classId, hod.department_id);
+
+    if (duplicate) {
+      throw new ConflictException({
+        message:
+          'A class with this batch, department, course, and section already exists',
+        errorCode: 'CLASS_ALREADY_EXISTS',
+      });
+    }
+
 
     try {
-      await this.prisma.class_mentors.delete({
-        where: {
-          class_id_academic_year: {
-            class_id: classId,
-            academic_year: academicYear,
-          },
+
+      return await this.prisma.classes.update({
+        where: { id },
+
+        data: {
+          batch_id,
+          department_id,
+          course_id,
+          section,
+          current_semester:
+            updateClassDto.current_semester,
         },
       });
-    } catch (err: unknown) {
-      if (prismaErrorCode(err) === 'P2025') {
-        throw new NotFoundException({
+
+
+    } catch (error: any) {
+
+      this.logger.error('DB error while updating class', error);
+
+
+      if (error.code === 'P2002') {
+        throw new ConflictException({
           message:
-            'No mentor assignment exists for this class in that academic year',
-          errorCode: 'MENTOR_NOT_ASSIGNED',
+            'A class with this batch, department, course, and section already exists',
+          errorCode: 'CLASS_ALREADY_EXISTS',
         });
       }
-      throw err;
-    }
 
-    this.logger.log(
-      `Class mentor removed: class=${classId} year=${academicYear}`,
-    );
-    return { class_id: classId, academic_year: academicYear, removed: true };
-  }
 
-  private async resolveFacultyByUserId(userId: number) {
-    const faculty = await this.prisma.faculty.findUnique({
-      where: { user_id: userId },
-    });
-    if (!faculty) {
-      throw new NotFoundException(
-        'Faculty profile not found for the authenticated user',
-      );
-    }
-    return faculty;
-  }
-
-  private async assertClassInDepartment(classId: number, departmentId: number) {
-    const klass = await this.prisma.classes.findUnique({
-      where: { id: classId },
-    });
-    if (!klass) {
-      throw new NotFoundException({
-        message: 'Class not found',
-        errorCode: 'CLASS_NOT_FOUND',
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
       });
     }
-    if (klass.department_id !== departmentId) {
-      throw new ForbiddenException({
-        message: 'You can only assign mentors within your own department',
-        errorCode: 'DEPARTMENT_SCOPE_VIOLATION',
-      });
-    }
-    return klass;
   }
 
-  private async assertClassExists(classId: number) {
-    const klass = await this.prisma.classes.findUnique({
-      where: { id: classId },
-    });
-    if (!klass) {
-      throw new NotFoundException({
-        message: 'Class not found',
-        errorCode: 'CLASS_NOT_FOUND',
-      });
-    }
-    return klass;
-  }
 
-  private async assertFacultyExists(facultyId: number) {
-    const faculty = await this.prisma.faculty.findUnique({
-      where: { id: facultyId },
-    });
-    if (!faculty) {
-      throw new NotFoundException({
-        message: 'Faculty not found',
-        errorCode: 'FACULTY_NOT_FOUND',
+
+  async remove(id: number) {
+
+    try {
+
+      return await this.prisma.classes.delete({
+        where: { id },
       });
+
+
+    } catch (error: any) {
+
+
+      if (error.code === 'P2025') {
+
+        throw new NotFoundException({
+          message: 'Class not found',
+          errorCode: 'CLASS_NOT_FOUND',
+        });
+
+      }
+
+
+      this.logger.error('DB error while deleting class', error);
+
+
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+
     }
-    return faculty;
   }
 }
