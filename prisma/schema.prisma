@@ -1598,6 +1598,8 @@ model announcement_class_mapping {
   @@index([class_id], map: "idx_announcement_class_mapping_class")
 }
 
+<<<<<<< HEAD
+=======
 model hall_ticket_clearance_exceptions {
   id                      Int                             @id @default(autoincrement())
   student_id              Int
@@ -1698,6 +1700,7 @@ model project_teams {
 }
 
 >>>>>>> ee45987a03b5d6cf093354c72b08b130899ff463
+>>>>>>> 1e2c4bda7d7d144f8596b4c980b776202a5e5d2c
 enum address_type_enum {
   permanent
   temporary
@@ -1887,6 +1890,8 @@ enum venue_booking_status_enum {
 }
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
 enum clearance_exception_status_enum {
   pending
   approved
@@ -1901,6 +1906,7 @@ enum clearance_type_enum {
 
 =======
 >>>>>>> ee45987a03b5d6cf093354c72b08b130899ff463
+>>>>>>> 1e2c4bda7d7d144f8596b4c980b776202a5e5d2c
 enum feedback_question_type_enum {
   rating
   text
@@ -1913,6 +1919,8 @@ enum feedback_rating_label_enum {
   satisfactory
   need_improvement
 }
+<<<<<<< HEAD
+=======
 <<<<<<< HEAD
 =======
 
@@ -1928,3 +1936,4 @@ enum clearance_type_enum {
   library_due
 }
 >>>>>>> ee45987a03b5d6cf093354c72b08b130899ff463
+>>>>>>> 1e2c4bda7d7d144f8596b4c980b776202a5e5d2c

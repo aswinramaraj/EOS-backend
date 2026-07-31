@@ -20,6 +20,8 @@ import { StudentsModule } from './modules/admissions/students/students.module';
 import { AnnouncementsModule } from './modules/announcements/announcements/announcements.module';
 import { ExamsModule } from './modules/exams/exams/exams.module';
 import { ExamTypesModule } from './modules/exams/exam-types/exam-types.module';
+import { ExamSubjectMappingModule } from './modules/exams/exam-subject-mapping/exam-subject-mapping.module';
+import { ExamTimetableModule } from './modules/exams/exam-timetable/exam-timetable.module';
 import { HallPlansModule } from './modules/exams/hall-plans/hall-plans.module';
 import { InvigilationModule } from './modules/exams/invigilation/invigilation.module';
 import { MarksModule } from './modules/exams/marks/marks.module';
@@ -72,6 +74,9 @@ import { VendorQuotationsModule } from './modules/procurement/vendor-quotations/
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     ScheduleModule.forRoot(),
 
+<<<<<<< HEAD
+    AuthModule, AcademicCalendarModule, BatchesModule, CoursesModule, ClassesModule, DepartmentsModule, SubjectsModule, BonafideModule, CertificatesModule, OdModule, SoaApplicationsModule, StudentLeavesModule, StudentsModule, AnnouncementsModule, ExamsModule, ExamTypesModule,ExamSubjectMappingModule,ExamTimetableModule, HallPlansModule, InvigilationModule, MarksModule, ResultsModule, RevaluationModule, AppraisalModule, AttendanceModule, FacultyLeavesModule, FacultyMappingModule, FacultyModule, HrPayrollModule, LessonPlansModule, LmsNotesModule, MediaRequestsModule, TimetableModule, BillingModule, EducationLoanModule, FeeStructureModule, GateLedgerModule, HostelModule, TransportModule, BooksModule, BorrowRecordsModule, EResourcesModule, CompaniesModule, DrivesModule, StudentProfilesModule, GrnModule, PurchaseOrdersModule, ServiceOrdersModule, VendorsModule, VenuesModule, NotificationsModule, FeedbackModule,
+=======
     AuthModule,
     AcademicCalendarModule,
     BatchesModule,
@@ -143,6 +148,7 @@ import { VendorQuotationsModule } from './modules/procurement/vendor-quotations/
     VenuesModule,
     NotificationsModule,
     FeedbackModule,
+>>>>>>> 1e2c4bda7d7d144f8596b4c980b776202a5e5d2c
   ],
 
   controllers: [AppController],
