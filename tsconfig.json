@@ -1,14 +1,8 @@
 {
   "compilerOptions": {
-<<<<<<< HEAD
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "types": ["node", "jest"],
-=======
-    "ignoreDeprecations": "5.0",
     "module": "commonjs",
     "moduleResolution": "node",
->>>>>>> 1e2c4bda7d7d144f8596b4c980b776202a5e5d2c
+    "types": ["node", "jest"],
     "esModuleInterop": true,
     "isolatedModules": true,
     "declaration": true,
@@ -19,7 +13,7 @@
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
-    "baseUrl":"./",
+    "baseUrl": "./",
     "ignoreDeprecations": "5.0",
     "incremental": true,
     "skipLibCheck": true,

@@ -90,7 +90,7 @@ export class ServiceOrderProposalsController {
    *  500 INTERNAL_ERROR – unexpected server failure
    */
   @Get()
-  @Roles(ROLES.ADMIN)
+  @Roles(ROLES.ADMIN, ROLES.FINANCE, ROLES.HOD)
   findAll() {
     return this.serviceOrderProposalsService.findAll();
   }

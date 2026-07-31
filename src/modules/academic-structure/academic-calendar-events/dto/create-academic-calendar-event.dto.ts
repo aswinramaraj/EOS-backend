@@ -12,9 +12,6 @@ import {
 export enum AcademicCalendarEventType {
   HOLIDAY = 'holiday',
   EVENT = 'event',
-  EXAM = 'exam',
-  ACADEMIC = 'academic',
-  OTHER = 'other',
 }
 
 export class CreateAcademicCalendarEventDto {
