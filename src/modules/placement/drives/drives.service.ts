@@ -1,26 +1,331 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { paginate } from '../../../common/dto/pagination.dto';
+import { CompaniesService } from '../companies/companies.service';
+import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface';
+import { target_audience_enum } from '../../../../generated/prisma/enums';
 import { CreateDriveDto } from './dto/create-drive.dto';
 import { UpdateDriveDto } from './dto/update-drive.dto';
+import { ListDrivesQueryDto } from './dto/list-drives-query.dto';
+import { CreateDriveApplicationDto } from './dto/create-drive-application.dto';
+import { UpdateDriveApplicationStatusDto } from './dto/update-drive-application-status.dto';
+
+/** Midnight-truncated Date for comparisons against @db.Date columns. */
+function today(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
 
 @Injectable()
 export class DrivesService {
-  create(createDriveDto: CreateDriveDto) {
-    return 'This action adds a new drive';
+  private readonly logger = new Logger(DrivesService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly companiesService: CompaniesService,
+  ) {}
+
+  async create(user: JwtPayload, dto: CreateDriveDto) {
+    await this.companiesService.findOne(dto.company_id);
+
+    const scheduledDate = new Date(dto.scheduled_date);
+    if (scheduledDate < today()) {
+      throw new BadRequestException('scheduled_date cannot be in the past');
+    }
+
+    const isDisclosed = dto.is_disclosed ?? true;
+    const revealDate = this.resolveRevealDate(
+      isDisclosed,
+      dto.disclosed_reveal_date,
+      scheduledDate,
+    );
+
+    return this.prisma.placement_drives.create({
+      data: {
+        company_id: dto.company_id,
+        scheduled_date: scheduledDate,
+        is_disclosed: isDisclosed,
+        disclosed_reveal_date: revealDate,
+        created_by_user_id: user.sub,
+      },
+      include: { companies: true },
+    });
   }
 
-  findAll() {
-    return `This action returns all drives`;
+  async findAll(dto: ListDrivesQueryDto) {
+    const where: Record<string, unknown> = {};
+    if (dto.company_id) where.company_id = dto.company_id;
+    if (dto.status) where.status = dto.status;
+    if (dto.upcoming) where.scheduled_date = { gte: today() };
+
+    const [data, total] = await Promise.all([
+      this.prisma.placement_drives.findMany({
+        where,
+        skip: dto.skip,
+        take: dto.limit,
+        orderBy: { scheduled_date: 'asc' },
+        include: {
+          companies: true,
+          _count: { select: { student_drive_applications: true } },
+        },
+      }),
+      this.prisma.placement_drives.count({ where }),
+    ]);
+
+    return paginate(data, total, dto);
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} drive`;
+  async findOne(id: number) {
+    return this.findOrThrow(id);
   }
 
-  update(id: number, updateDriveDto: UpdateDriveDto) {
-    return `This action updates a #${id} drive`;
+  async update(id: number, dto: UpdateDriveDto) {
+    const drive = await this.findOrThrow(id);
+
+    if (dto.company_id) await this.companiesService.findOne(dto.company_id);
+
+    const scheduledDate = dto.scheduled_date
+      ? new Date(dto.scheduled_date)
+      : drive.scheduled_date;
+
+    const isDisclosed = dto.is_disclosed ?? drive.is_disclosed;
+    const revealDate = this.resolveRevealDate(
+      isDisclosed,
+      dto.disclosed_reveal_date ??
+        drive.disclosed_reveal_date?.toISOString().slice(0, 10),
+      scheduledDate,
+    );
+
+    return this.prisma.placement_drives.update({
+      where: { id },
+      data: {
+        company_id: dto.company_id,
+        scheduled_date: scheduledDate,
+        is_disclosed: isDisclosed,
+        disclosed_reveal_date: revealDate,
+        status: dto.status,
+      },
+      include: { companies: true },
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} drive`;
+  async remove(id: number) {
+    await this.findOrThrow(id);
+
+    const applicationCount = await this.prisma.student_drive_applications.count({
+      where: { drive_id: id },
+    });
+    if (applicationCount > 0) {
+      throw new ConflictException(
+        'Cannot delete a drive that already has student applications',
+      );
+    }
+
+    await this.prisma.placement_drives.delete({ where: { id } });
+    return { id };
+  }
+
+  // ───────────────────────────── Applications ─────────────────────────────
+
+  async addApplication(driveId: number, dto: CreateDriveApplicationDto) {
+    await this.findOrThrow(driveId);
+
+    const student = await this.prisma.students.findUnique({
+      where: { id: dto.student_id },
+    });
+    if (!student) {
+      throw new NotFoundException(`Student ${dto.student_id} not found`);
+    }
+
+    const existing = await this.prisma.student_drive_applications.findUnique({
+      where: {
+        drive_id_student_id: { drive_id: driveId, student_id: dto.student_id },
+      },
+    });
+    if (existing) {
+      throw new ConflictException(
+        'This student is already mapped to this drive',
+      );
+    }
+
+    return this.prisma.student_drive_applications.create({
+      data: { drive_id: driveId, student_id: dto.student_id },
+    });
+  }
+
+  async listApplications(driveId: number) {
+    await this.findOrThrow(driveId);
+
+    return this.prisma.student_drive_applications.findMany({
+      where: { drive_id: driveId },
+      include: {
+        students: { select: { id: true, student_id_no: true, roll_no: true } },
+      },
+      orderBy: { updated_at: 'desc' },
+    });
+  }
+
+  async updateApplicationStatus(
+    user: JwtPayload,
+    driveId: number,
+    studentId: number,
+    dto: UpdateDriveApplicationStatusDto,
+  ) {
+    const application = await this.findApplicationOrThrow(driveId, studentId);
+
+    return this.prisma.student_drive_applications.update({
+      where: { id: application.id },
+      data: {
+        status: dto.status,
+        updated_by_user_id: user.sub,
+        updated_at: new Date(),
+      },
+    });
+  }
+
+  async removeApplication(driveId: number, studentId: number) {
+    const application = await this.findApplicationOrThrow(driveId, studentId);
+    await this.prisma.student_drive_applications.delete({
+      where: { id: application.id },
+    });
+    return { driveId, studentId };
+  }
+
+  // ───────────────────────────── Student-facing history ─────────────────────────────
+
+  async getHistoryForStudent(user: JwtPayload) {
+    const student = await this.prisma.students.findUnique({
+      where: { user_id: user.sub },
+    });
+    if (!student) {
+      throw new NotFoundException('Student profile not found for the current user');
+    }
+
+    const applications = await this.prisma.student_drive_applications.findMany({
+      where: { student_id: student.id },
+      include: { placement_drives: { include: { companies: true } } },
+      orderBy: { updated_at: 'desc' },
+    });
+
+    return applications.map((app) => {
+      const drive = app.placement_drives;
+      return {
+        drive_id: drive.id,
+        company_name: drive.is_disclosed ? drive.companies.name : 'Undisclosed',
+        scheduled_date: drive.scheduled_date,
+        drive_status: drive.status,
+        application_status: app.status,
+      };
+    });
+  }
+
+  // ───────────────────────────── Automation ─────────────────────────────
+
+  /** Auto-reveals undisclosed companies once their reveal date arrives, and posts the day-before announcement. */
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async runDailyAutomation() {
+    await this.revealDueCompanies();
+    await this.announceTomorrowsDrives();
+  }
+
+  private async revealDueCompanies() {
+    const { count } = await this.prisma.placement_drives.updateMany({
+      where: { is_disclosed: false, disclosed_reveal_date: { lte: today() } },
+      data: { is_disclosed: true },
+    });
+    if (count > 0) {
+      this.logger.log(`Revealed ${count} placement drive compan${count === 1 ? 'y' : 'ies'}`);
+    }
+  }
+
+  private async announceTomorrowsDrives() {
+    const tomorrow = new Date(today());
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const drives = await this.prisma.placement_drives.findMany({
+      where: {
+        scheduled_date: tomorrow,
+        notification_sent_at: null,
+        created_by_user_id: { not: null },
+      },
+      include: { companies: true },
+    });
+
+    for (const drive of drives) {
+      const companyLabel = drive.is_disclosed ? drive.companies.name : 'A company';
+      await this.prisma.announcements.create({
+        data: {
+          posted_by_user_id: drive.created_by_user_id as number,
+          title: 'Placement Drive Tomorrow',
+          content: `${companyLabel} is conducting a placement drive tomorrow (${drive.scheduled_date.toISOString().slice(0, 10)}).`,
+          target_audience: target_audience_enum.students,
+        },
+      });
+
+      await this.prisma.placement_drives.update({
+        where: { id: drive.id },
+        data: { notification_sent_at: new Date() },
+      });
+    }
+
+    if (drives.length > 0) {
+      this.logger.log(`Posted ${drives.length} day-before drive announcement(s)`);
+    }
+  }
+
+  // ───────────────────────────── Helpers ─────────────────────────────
+
+  private resolveRevealDate(
+    isDisclosed: boolean,
+    revealDate: string | undefined,
+    scheduledDate: Date,
+  ): Date | null {
+    if (isDisclosed) return null;
+
+    if (!revealDate) {
+      throw new BadRequestException(
+        'disclosed_reveal_date is required when is_disclosed is false',
+      );
+    }
+
+    const parsed = new Date(revealDate);
+    if (parsed >= scheduledDate) {
+      throw new BadRequestException(
+        'disclosed_reveal_date must be before scheduled_date',
+      );
+    }
+
+    return parsed;
+  }
+
+  private async findOrThrow(id: number) {
+    const drive = await this.prisma.placement_drives.findUnique({
+      where: { id },
+    });
+    if (!drive) throw new NotFoundException(`Drive ${id} not found`);
+    return drive;
+  }
+
+  private async findApplicationOrThrow(driveId: number, studentId: number) {
+    const application = await this.prisma.student_drive_applications.findUnique(
+      {
+        where: {
+          drive_id_student_id: { drive_id: driveId, student_id: studentId },
+        },
+      },
+    );
+    if (!application) {
+      throw new NotFoundException(
+        `No application found for student ${studentId} on drive ${driveId}`,
+      );
+    }
+    return application;
   }
 }

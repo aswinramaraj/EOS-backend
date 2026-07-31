@@ -57,5 +57,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
 brain
-todo.md
-test/methods
+test\methods

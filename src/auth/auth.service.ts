@@ -6,14 +6,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import crypto from 'node:crypto';
-import { createRequire } from 'node:module';
+import * as jwt from 'jsonwebtoken';
 import { PrismaService } from 'src/prisma/prisma.service';
 import type { LoginDto } from './dto/login.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
-
-// jsonwebtoken is CJS — load safely in ESM context
-const _require = createRequire(import.meta.url);
-const jwt = _require('jsonwebtoken') as typeof import('jsonwebtoken');
 
 @Injectable()
 export class AuthService {
