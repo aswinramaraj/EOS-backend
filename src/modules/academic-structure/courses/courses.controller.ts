@@ -6,18 +6,33 @@ import {
   Patch,
   Param,
   Delete,
+<<<<<<< HEAD
+=======
+  UseGuards,
+>>>>>>> c43633224d18a4c76f422fa4859990192aed2664
 } from '@nestjs/common';
 import { CoursesService } from './courses.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { ApiResponse, ROLES } from 'src/common';
 
 @Controller('courses')
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
 
+  /**
+   * POST /api/v1/courses
+   * Admin only — creates a new course under an existing department.
+   */
   @Post()
-  create(@Body() createCourseDto: CreateCourseDto) {
-    return this.coursesService.create(createCourseDto);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.ADMIN)
+  async create(@Body() createCourseDto: CreateCourseDto) {
+    const course = await this.coursesService.create(createCourseDto);
+    return ApiResponse.created(course, 'Course created successfully');
   }
 
   @Get()

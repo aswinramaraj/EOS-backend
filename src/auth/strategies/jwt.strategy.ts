@@ -1,14 +1,17 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { createRequire } from 'node:module';
+import { Strategy, ExtractJwt } from 'passport-jwt';
 import type { JwtPayload } from '../interfaces/jwt-payload.interface';
 
+<<<<<<< HEAD
 // passport-jwt is a CJS package — load safely in ESM context
 const _require = createRequire(import.meta.url);
 const { Strategy, ExtractJwt } = _require(
   'passport-jwt',
 ) as typeof import('passport-jwt');
 
+=======
+>>>>>>> c43633224d18a4c76f422fa4859990192aed2664
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor() {

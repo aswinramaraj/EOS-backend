@@ -1,1 +1,51 @@
-export class CreateAttendanceDto {}
+import { Type } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  ValidateNested,
+} from 'class-validator';
+
+/**
+ * One student's status within a POST /attendance batch.
+ * `status` is validated against the actual attendance_status_enum values
+ * (present/absent only — schema has no od/leave, unlike workflow.md's mention of them).
+ */
+export class AttendanceRecordItemDto {
+  @IsInt()
+  student_id: number;
+
+  @IsIn(['present', 'absent'])
+  status: 'present' | 'absent';
+}
+
+/**
+ * POST /attendance (Faculty only).
+ * Marks attendance for one or more students in a single class session.
+ *
+ * `subject_id` is optional because attendance_records.subject_id is nullable
+ * in the schema. There is no `session` field anywhere in attendance_records —
+ * schema is the source of truth, so it is intentionally absent here.
+ * `marked_by_faculty_id` is never client-supplied — the service derives it
+ * from the authenticated faculty (@CurrentUser().sub).
+ */
+export class CreateAttendanceDto {
+  @IsInt()
+  class_id: number;
+
+  @IsOptional()
+  @IsInt()
+  subject_id?: number;
+
+  @IsDateString({}, { message: 'date must be a valid ISO date' })
+  date: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => AttendanceRecordItemDto)
+  records: AttendanceRecordItemDto[];
+}

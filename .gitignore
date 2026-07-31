@@ -57,7 +57,5 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
 
-CLAUDE.md
-workflow.md
-to_create
-tested_successfully
+brain
+test\methods

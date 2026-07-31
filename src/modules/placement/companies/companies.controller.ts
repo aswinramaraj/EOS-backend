@@ -1,4 +1,5 @@
 import {
+<<<<<<< HEAD
   Controller,
   Get,
   Post,
@@ -6,37 +7,59 @@ import {
   Patch,
   Param,
   Delete,
+=======
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+>>>>>>> c43633224d18a4c76f422fa4859990192aed2664
 } from '@nestjs/common';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { ListCompaniesQueryDto } from './dto/list-companies-query.dto';
+import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../auth/guards/roles.guard';
+import { Roles } from '../../../auth/decorators/roles.decorator';
+import { ROLES } from '../../../common/constants/roles.constant';
 
+/**
+ * Company records managed by the Placement Cell (per worflow.md), with Admin retaining oversight access.
+ */
 @Controller('companies')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(ROLES.PLACEMENT, ROLES.ADMIN)
 export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 
   @Post()
-  create(@Body() createCompanyDto: CreateCompanyDto) {
-    return this.companiesService.create(createCompanyDto);
+  create(@Body() dto: CreateCompanyDto) {
+    return this.companiesService.create(dto);
   }
 
   @Get()
-  findAll() {
-    return this.companiesService.findAll();
+  findAll(@Query() query: ListCompaniesQueryDto) {
+    return this.companiesService.findAll(query);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.companiesService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.companiesService.findOne(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateCompanyDto: UpdateCompanyDto) {
-    return this.companiesService.update(+id, updateCompanyDto);
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateCompanyDto) {
+    return this.companiesService.update(id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.companiesService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.companiesService.remove(id);
   }
 }

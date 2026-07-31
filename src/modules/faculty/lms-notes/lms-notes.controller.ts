@@ -1,4 +1,5 @@
 import {
+<<<<<<< HEAD
   Controller,
   Get,
   Post,
@@ -7,36 +8,77 @@ import {
   Param,
   Delete,
 } from '@nestjs/common';
+=======
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import type { JwtPayload } from 'src/auth/interfaces/jwt-payload.interface';
+import { ROLES } from 'src/common/constants/roles.constant';
+>>>>>>> c43633224d18a4c76f422fa4859990192aed2664
 import { LmsNotesService } from './lms-notes.service';
 import { CreateLmsNoteDto } from './dto/create-lms-note.dto';
 import { UpdateLmsNoteDto } from './dto/update-lms-note.dto';
+import { ListLmsNoteQueryDto } from './dto/list-lms-note-query.dto';
 
-@Controller('lms-notes')
+@Controller('me')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class LmsNotesController {
   constructor(private readonly lmsNotesService: LmsNotesService) {}
 
-  @Post()
-  create(@Body() createLmsNoteDto: CreateLmsNoteDto) {
-    return this.lmsNotesService.create(createLmsNoteDto);
+  /** POST /api/v1/lms-notes — Faculty only. */
+  @Post('lms-notes')
+  @Roles(ROLES.FACULTY)
+  @HttpCode(HttpStatus.CREATED)
+  create(@Body() dto: CreateLmsNoteDto, @CurrentUser() user: JwtPayload) {
+    return this.lmsNotesService.create(dto, user.sub);
   }
 
-  @Get()
-  findAll() {
-    return this.lmsNotesService.findAll();
+  /** GET /api/v1/lms-notes — Faculty/Student. Paginated, filterable. */
+  @Get('lms-notes')
+  @Roles(ROLES.FACULTY, ROLES.STUDENT)
+  findAll(@Query() query: ListLmsNoteQueryDto) {
+    return this.lmsNotesService.findAll(query);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.lmsNotesService.findOne(+id);
+  /** GET /api/v1/lms-notes/:id — Faculty/Student. */
+  @Get('lms-notes/:id')
+  @Roles(ROLES.FACULTY, ROLES.STUDENT)
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.lmsNotesService.findOne(id);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateLmsNoteDto: UpdateLmsNoteDto) {
-    return this.lmsNotesService.update(+id, updateLmsNoteDto);
+  /** PATCH /api/v1/lms-notes/:id — Faculty only, and only the faculty who owns it. */
+  @Patch('lms-notes/:id')
+  @Roles(ROLES.FACULTY)
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateLmsNoteDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.lmsNotesService.update(id, dto, user.sub);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.lmsNotesService.remove(+id);
+  /** DELETE /api/v1/lms-notes/:id — Faculty only, and only the faculty who owns it. */
+  @Delete('lms-notes/:id')
+  @Roles(ROLES.FACULTY)
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.lmsNotesService.remove(id, user.sub);
   }
 }
