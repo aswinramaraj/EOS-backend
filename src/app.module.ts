@@ -35,19 +35,8 @@ import { LessonPlansModule } from './modules/faculty/lesson-plans/lesson-plans.m
 import { LmsNotesModule } from './modules/faculty/lms-notes/lms-notes.module';
 import { MediaRequestsModule } from './modules/faculty/media-requests/media-requests.module';
 import { TimetableModule } from './modules/faculty/timetable/timetable.module';
-import { DemandModule } from './modules/fees-billing/demand/demand.module';
-import { EducationLoanDdModule } from './modules/fees-billing/education-loan-dd/education-loan-dd.module';
-import { FeeConcessionModule } from './modules/fees-billing/fee-concessions/fee-concession.module';
-import { FeePaymentModule } from './modules/fees-billing/fee-payments/fee-payment.module';
 import { FeeStructureModule } from './modules/fees-billing/fee-structure/fee-structure.module';
-import { FeeStructureItemModule } from './modules/fees-billing/fee-structure-items/fee-structure-item.module';
 import { GateLedgerModule } from './modules/fees-billing/gate-ledger/gate-ledger.module';
-import { HostelRoomModule } from './modules/fees-billing/hostel-rooms/hostel-room.module';
-import { HostelRoomTypeModule } from './modules/fees-billing/hostel-room-types/hostel-room-type.module';
-import { QuotaModule } from './modules/fees-billing/quota/quota.module';
-import { StudentFeeDemandMappingModule } from './modules/fees-billing/student-fee-demand-mapping/student-fee-demand-mapping.module';
-import { TransportRouteModule } from './modules/fees-billing/transport-routes/transport-route.module';
-import { TransportStageModule } from './modules/fees-billing/transport-stages/transport-stage.module';
 import { BooksModule } from './modules/library/books/books.module';
 import { BorrowRecordsModule } from './modules/library/borrow-records/borrow-records.module';
 import { EResourcesModule } from './modules/library/e-resources/e-resources.module';
@@ -55,40 +44,111 @@ import { CompaniesModule } from './modules/placement/companies/companies.module'
 import { DrivesModule } from './modules/placement/drives/drives.module';
 import { StudentProfilesModule } from './modules/placement/student-profiles/student-profiles.module';
 import { GrnModule } from './modules/procurement/grn/grn.module';
-import { PurchaseIndentsModule } from './modules/procurement/purchase-indents/purchase-indents.module';
-import { PurchaseOrderProposalsModule } from './modules/procurement/purchase-order-proposals/purchase-order-proposals.module';
 import { PurchaseOrdersModule } from './modules/procurement/purchase-orders/purchase-orders.module';
-import { ServiceIndentsModule } from './modules/procurement/service-indents/service-indents.module';
-import { ServiceOrderProposalsModule } from './modules/procurement/service-order-proposals/service-order-proposals.module';
 import { ServiceOrdersModule } from './modules/procurement/service-orders/service-orders.module';
-import { VendorQuotationsModule } from './modules/procurement/vendor-quotations/vendor-quotations.module';
 import { VendorsModule } from './modules/procurement/vendors/vendors.module';
 import { VenuesModule } from './modules/venues/venues/venues.module';
 import { NotificationsModule } from './modules/notifications/notifications/notifications.module';
 import { FeedbackModule } from './modules/feedback/feedback/feedback.module';
+import { DemandModule } from './modules/fees-billing/demand/demand.module';
+import { EducationLoanDdModule } from './modules/fees-billing/education-loan-dd/education-loan-dd.module';
+import { FeeConcessionModule } from './modules/fees-billing/fee-concessions/fee-concession.module';
+import { FeePaymentModule } from './modules/fees-billing/fee-payments/fee-payment.module';
+import { FeeStructureItemModule } from './modules/fees-billing/fee-structure-items/fee-structure-item.module';
+import { HostelRoomModule } from './modules/fees-billing/hostel-rooms/hostel-room.module';
+import { HostelRoomTypeModule } from './modules/fees-billing/hostel-room-types/hostel-room-type.module';
+import { QuotaModule } from './modules/fees-billing/quota/quota.module';
+import { StudentFeeDemandMappingModule } from './modules/fees-billing/student-fee-demand-mapping/student-fee-demand-mapping.module';
+import { TransportRouteModule } from './modules/fees-billing/transport-routes/transport-route.module';
+import { TransportStageModule } from './modules/fees-billing/transport-stages/transport-stage.module';
+import { PurchaseIndentsModule } from './modules/procurement/purchase-indents/purchase-indents.module';
+import { PurchaseOrderProposalsModule } from './modules/procurement/purchase-order-proposals/purchase-order-proposals.module';
+import { ServiceIndentsModule } from './modules/procurement/service-indents/service-indents.module';
+import { ServiceOrderProposalsModule } from './modules/procurement/service-order-proposals/service-order-proposals.module';
+import { VendorQuotationsModule } from './modules/procurement/vendor-quotations/vendor-quotations.module';
 
 @Module({
   imports: [
-    // ── Rate limiting (global) ──────────────────────────────────────────────
-    // Default: 100 requests per 60 seconds per IP
-    // Login endpoint overrides this to 5 attempts per 60 seconds (see AuthController)
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
-
-<<<<<<< HEAD
-    AuthModule, AcademicCalendarModule, BatchesModule, CoursesModule, ClassesModule, DepartmentsModule, SubjectsModule, BonafideModule, CertificatesModule, OdModule, SoaApplicationsModule, StudentLeavesModule, StudentsModule, AnnouncementsModule, ExamsModule, ExamTypesModule, HallPlansModule, InvigilationModule, MarksModule, ResultsModule, RevaluationModule, AppraisalModule, AttendanceModule, FacultyLeavesModule, FacultyMappingModule, FacultyModule, HrPayrollModule, LessonPlansModule, LmsNotesModule, MediaRequestsModule, TimetableModule, DemandModule, EducationLoanDdModule, FeeConcessionModule, FeePaymentModule, FeeStructureModule, FeeStructureItemModule, GateLedgerModule, HostelRoomModule, HostelRoomTypeModule, QuotaModule, StudentFeeDemandMappingModule, TransportRouteModule, TransportStageModule, BooksModule, BorrowRecordsModule, EResourcesModule, CompaniesModule, DrivesModule, StudentProfilesModule, GrnModule, PurchaseIndentsModule, PurchaseOrderProposalsModule, PurchaseOrdersModule, ServiceIndentsModule, ServiceOrderProposalsModule, ServiceOrdersModule, VendorQuotationsModule, VendorsModule, VenuesModule, NotificationsModule, FeedbackModule,
-=======
-    // ── Cron scheduling (global) ────────────────────────────────────────────
-    // Used by DrivesModule to auto-reveal undisclosed companies and post
-    // day-before drive announcements.
     ScheduleModule.forRoot(),
 
-    AuthModule, AcademicCalendarModule, BatchesModule, CoursesModule, ClassesModule, DepartmentsModule, SubjectsModule, BonafideModule, CertificatesModule, OdModule, SoaApplicationsModule, StudentLeavesModule, StudentsModule, AnnouncementsModule, ExamsModule, ExamTypesModule, HallPlansModule, InvigilationModule, MarksModule, ResultsModule, RevaluationModule, AppraisalModule, AttendanceModule, FacultyLeavesModule, FacultyMappingModule, FacultyModule, HrPayrollModule, LessonPlansModule, LmsNotesModule, MediaRequestsModule, TimetableModule, BillingModule, EducationLoanModule, FeeStructureModule, GateLedgerModule, HostelModule, TransportModule, BooksModule, BorrowRecordsModule, EResourcesModule, CompaniesModule, DrivesModule, StudentProfilesModule, GrnModule, PurchaseOrdersModule, ServiceOrdersModule, VendorsModule, VenuesModule, NotificationsModule, FeedbackModule,
->>>>>>> d34f18d9f2853d607d743f85819ab21edd731548
+    AuthModule,
+    AcademicCalendarModule,
+    BatchesModule,
+    CoursesModule,
+    ClassesModule,
+    DepartmentsModule,
+    SubjectsModule,
+
+    BonafideModule,
+    CertificatesModule,
+    OdModule,
+    SoaApplicationsModule,
+    StudentLeavesModule,
+    StudentsModule,
+
+    AnnouncementsModule,
+
+    ExamsModule,
+    ExamTypesModule,
+    HallPlansModule,
+    InvigilationModule,
+    MarksModule,
+    ResultsModule,
+    RevaluationModule,
+
+    AppraisalModule,
+    AttendanceModule,
+    FacultyLeavesModule,
+    FacultyMappingModule,
+    FacultyModule,
+    HrPayrollModule,
+    LessonPlansModule,
+    LmsNotesModule,
+    MediaRequestsModule,
+    TimetableModule,
+
+    DemandModule,
+    EducationLoanDdModule,
+    FeeConcessionModule,
+    FeePaymentModule,
+    FeeStructureModule,
+    FeeStructureItemModule,
+    GateLedgerModule,
+    HostelRoomModule,
+    HostelRoomTypeModule,
+    QuotaModule,
+    StudentFeeDemandMappingModule,
+    TransportRouteModule,
+    TransportStageModule,
+
+    BooksModule,
+    BorrowRecordsModule,
+    EResourcesModule,
+
+    CompaniesModule,
+    DrivesModule,
+    StudentProfilesModule,
+
+    GrnModule,
+    PurchaseIndentsModule,
+    PurchaseOrderProposalsModule,
+    PurchaseOrdersModule,
+    ServiceIndentsModule,
+    ServiceOrderProposalsModule,
+    ServiceOrdersModule,
+    VendorQuotationsModule,
+    VendorsModule,
+
+    VenuesModule,
+    NotificationsModule,
+    FeedbackModule,
   ],
+
   controllers: [AppController],
+
   providers: [
     AppService,
-    // Apply ThrottlerGuard to every route globally
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
