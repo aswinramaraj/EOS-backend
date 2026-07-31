@@ -1,6 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DrivesController } from './drives.controller';
 import { DrivesService } from './drives.service';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { CompaniesService } from '../companies/companies.service';
+
+// The real PrismaService pulls in the generated Prisma client, which uses
+// `import.meta.url` and cannot be parsed by ts-jest's CommonJS transform.
+// Mock it out before it's ever required.
+jest.mock('../../../prisma/prisma.service', () => ({
+  PrismaService: class PrismaServiceMock {},
+}));
 
 describe('DrivesController', () => {
   let controller: DrivesController;
@@ -8,7 +17,11 @@ describe('DrivesController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DrivesController],
-      providers: [DrivesService],
+      providers: [
+        DrivesService,
+        { provide: PrismaService, useValue: {} },
+        { provide: CompaniesService, useValue: {} },
+      ],
     }).compile();
 
     controller = module.get<DrivesController>(DrivesController);
