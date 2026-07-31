@@ -1,15 +1,31 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
 import { ExamTypesService } from './exam-types.service';
 import { CreateExamTypeDto } from './dto/create-exam-type.dto';
 import { UpdateExamTypeDto } from './dto/update-exam-type.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { ApiResponse, ROLES } from 'src/common';
 
 @Controller('exam-types')
 export class ExamTypesController {
   constructor(private readonly examTypesService: ExamTypesService) {}
 
   @Post()
-  create(@Body() createExamTypeDto: CreateExamTypeDto) {
-    return this.examTypesService.create(createExamTypeDto);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.COE)
+  async create(@Body() createExamTypeDto: CreateExamTypeDto) {
+    const examType = await this.examTypesService.create(createExamTypeDto);
+    return ApiResponse.created(examType, 'Exam Type created successfully.');
   }
 
   @Get()
@@ -23,12 +39,18 @@ export class ExamTypesController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateExamTypeDto: UpdateExamTypeDto) {
-    return this.examTypesService.update(+id, updateExamTypeDto);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.COE)
+  async update(@Param('id') id: string, @Body() updateExamTypeDto: UpdateExamTypeDto) {
+    const examType = await this.examTypesService.update(+id, updateExamTypeDto);
+    return ApiResponse.ok(examType, 'Exam Type updated successfully.');
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.examTypesService.remove(+id);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROLES.COE)
+  async remove(@Param('id') id: string) {
+    await this.examTypesService.remove(+id);
+    return ApiResponse.ok(null, 'Exam Type deleted successfully.');
   }
 }

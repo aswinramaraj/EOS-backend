@@ -1,26 +1,301 @@
-import { Injectable } from '@nestjs/common';
+// revaluation.service.ts
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+  UnprocessableEntityException,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateRevaluationDto } from './dto/create-revaluation.dto';
 import { UpdateRevaluationDto } from './dto/update-revaluation.dto';
 
+const VALID_STATUSES = ['requested', 'under_review', 'revised', 'no_change'];
+
 @Injectable()
 export class RevaluationService {
-  create(createRevaluationDto: CreateRevaluationDto) {
-    return 'This action adds a new revaluation';
+  private readonly logger = new Logger(RevaluationService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(createRevaluationDto: CreateRevaluationDto) {
+    const { exam_marks_id, student_id } = createRevaluationDto;
+
+    const examMark = await this.prisma.exam_marks.findUnique({
+      where: { id: exam_marks_id },
+    });
+
+    if (!examMark) {
+      throw new NotFoundException({
+        message: 'Exam marks record not found.',
+        errorCode: 'EXAM_MARKS_NOT_FOUND',
+      });
+    }
+
+    const student = await this.prisma.students.findUnique({
+      where: { id: student_id },
+    });
+
+    if (!student) {
+      throw new NotFoundException({
+        message: 'Student not found.',
+        errorCode: 'STUDENT_NOT_FOUND',
+      });
+    }
+
+    const existing = await this.prisma.revaluation_requests.findFirst({
+      where: { exam_marks_id, student_id },
+    });
+
+    if (existing) {
+      throw new ConflictException({
+        message: 'A revaluation request already exists for this exam mark.',
+        errorCode: 'REVALUATION_REQUEST_EXISTS',
+      });
+    }
+
+    try {
+      return await this.prisma.revaluation_requests.create({
+        data: { exam_marks_id, student_id },
+      });
+    } catch (err: any) {
+      this.logger.error('DB error while creating revaluation request', err);
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
   }
 
-  findAll() {
-    return `This action returns all revaluation`;
+  async findAll(status?: string) {
+    if (status && !VALID_STATUSES.includes(status)) {
+      throw new BadRequestException({
+        message: `status must be one of: ${VALID_STATUSES.join(', ')}`,
+        errorCode: 'INVALID_STATUS_FILTER',
+      });
+    }
+
+    try {
+      return await this.prisma.revaluation_requests.findMany({
+        where: status ? { status: status as any } : undefined,
+        include: {
+          exam_marks: {
+            include: {
+              exam_subject_mapping: {
+                include: {
+                  exams: true,
+                  subjects: true,
+                },
+              },
+            },
+          },
+          students: true,
+        },
+      });
+    } catch (err: any) {
+      this.logger.error('DB error while fetching revaluation requests', err);
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} revaluation`;
+  async findOne(id: number) {
+    let request: any;
+
+    try {
+      request = await this.prisma.revaluation_requests.findUnique({
+        where: { id },
+        include: {
+          exam_marks: {
+            include: {
+              exam_subject_mapping: {
+                include: {
+                  exams: true,
+                  subjects: true,
+                },
+              },
+            },
+          },
+          students: true,
+        },
+      });
+    } catch (err: any) {
+      this.logger.error('DB error while fetching revaluation request', err);
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
+
+    if (!request) {
+      throw new NotFoundException({
+        message: 'Revaluation request not found.',
+        errorCode: 'REVALUATION_REQUEST_NOT_FOUND',
+      });
+    }
+
+    return request;
   }
 
-  update(id: number, updateRevaluationDto: UpdateRevaluationDto) {
-    return `This action updates a #${id} revaluation`;
+  async update(id: number, updateRevaluationDto: UpdateRevaluationDto) {
+    const existing = await this.prisma.revaluation_requests.findUnique({
+      where: { id },
+      include: { exam_marks: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException({
+        message: 'Revaluation request not found.',
+        errorCode: 'REVALUATION_REQUEST_NOT_FOUND',
+      });
+    }
+
+    if (existing.status !== 'requested') {
+      throw new ConflictException({
+        message: 'This revaluation request has already been processed.',
+        errorCode: 'REVALUATION_ALREADY_PROCESSED',
+      });
+    }
+
+    const { status, revised_marks } = updateRevaluationDto;
+
+    if (revised_marks !== undefined) {
+      if (revised_marks < 0) {
+        throw new UnprocessableEntityException({
+          message: 'revised_marks cannot be negative.',
+          errorCode: 'INVALID_REVISED_MARKS',
+        });
+      }
+
+      if (revised_marks > Number(existing.exam_marks.max_marks)) {
+        throw new UnprocessableEntityException({
+          message: 'revised_marks cannot exceed max_marks.',
+          errorCode: 'INVALID_REVISED_MARKS',
+        });
+      }
+    }
+
+    try {
+      return await this.prisma.revaluation_requests.update({
+        where: { id },
+        data: {
+          status,
+          revised_marks,
+          resolved_at: new Date(),
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2025') {
+        throw new NotFoundException({
+          message: 'Revaluation request not found.',
+          errorCode: 'REVALUATION_REQUEST_NOT_FOUND',
+        });
+      }
+
+      this.logger.error('DB error while updating revaluation request', err);
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} revaluation`;
+  async remove(id: number) {
+    const existing = await this.prisma.revaluation_requests.findUnique({ where: { id } });
+
+    if (!existing) {
+      throw new NotFoundException({
+        message: 'Revaluation request not found.',
+        errorCode: 'REVALUATION_REQUEST_NOT_FOUND',
+      });
+    }
+
+    try {
+      await this.prisma.revaluation_requests.delete({ where: { id } });
+      return { id };
+    } catch (err: any) {
+      if (err?.code === 'P2025') {
+        throw new NotFoundException({
+          message: 'Revaluation request not found.',
+          errorCode: 'REVALUATION_REQUEST_NOT_FOUND',
+        });
+      }
+
+      this.logger.error('DB error while deleting revaluation request', err);
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  async publishRevaluation(examId: number, publishedByUserId: number) {
+    const exam = await this.prisma.exams.findUnique({ where: { id: examId } });
+
+    if (!exam) {
+      throw new NotFoundException({
+        message: 'Exam not found.',
+        errorCode: 'EXAM_NOT_FOUND',
+      });
+    }
+
+    const originalPublication = await this.prisma.result_publications.findFirst({
+      where: { exam_id: examId, publication_type: 'original' },
+    });
+
+    if (!originalPublication) {
+      throw new ConflictException({
+        message: 'Original results have not been published for this exam.',
+        errorCode: 'ORIGINAL_NOT_PUBLISHED',
+      });
+    }
+
+    const resolvedRequest = await this.prisma.revaluation_requests.findFirst({
+      where: {
+        status: 'revised',
+        revised_marks: { not: null },
+        exam_marks: {
+          exam_subject_mapping: { exam_id: examId },
+        },
+      },
+    });
+
+    if (!resolvedRequest) {
+      throw new UnprocessableEntityException({
+        message: 'No resolved revaluation requests found for this exam.',
+        errorCode: 'REVALUATION_INCOMPLETE',
+      });
+    }
+
+    const existingRevaluationPublication = await this.prisma.result_publications.findFirst({
+      where: { exam_id: examId, publication_type: 'revaluation' },
+    });
+
+    if (existingRevaluationPublication) {
+      throw new ConflictException({
+        message: 'Revaluation results have already been published for this exam.',
+        errorCode: 'ALREADY_PUBLISHED',
+      });
+    }
+
+    try {
+      return await this.prisma.result_publications.create({
+        data: {
+          exam_id: examId,
+          publication_type: 'revaluation',
+          published_by_user_id: publishedByUserId,
+        },
+      });
+    } catch (err: any) {
+      this.logger.error('DB error while publishing revaluation results', err);
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
   }
 }
