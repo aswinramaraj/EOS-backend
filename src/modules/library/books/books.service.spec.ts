@@ -1,12 +1,49 @@
+jest.mock('src/prisma/prisma.service', () => ({
+  PrismaService: jest.fn(),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { BooksService } from './books.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 describe('BooksService', () => {
   let service: BooksService;
 
+  const mockPrismaService = {
+    books: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      count: jest.fn(),
+    },
+    book_categories: {
+      findUnique: jest.fn(),
+    },
+    book_borrow_records: {
+      findFirst: jest.fn(),
+    },
+    $transaction: jest.fn((ops: Promise<any>[]) => Promise.all(ops)),
+    $queryRaw: jest.fn(),
+  };
+
   beforeEach(async () => {
+    jest.resetAllMocks();
+    mockPrismaService.$transaction.mockImplementation((ops: Promise<any>[]) =>
+      Promise.all(ops),
+    );
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [BooksService],
+      providers: [
+        BooksService,
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
+      ],
     }).compile();
 
     service = module.get<BooksService>(BooksService);
@@ -14,5 +51,427 @@ describe('BooksService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('create', () => {
+    const createDto = {
+      qr_code: 'QR-001',
+      title: 'Clean Code',
+      author: 'Robert Martin',
+      category_id: 1,
+      total_copies: 5,
+    };
+
+    it('should create a book successfully', async () => {
+      mockPrismaService.books.findFirst.mockResolvedValue(null);
+      mockPrismaService.books.findUnique.mockResolvedValue(null);
+      mockPrismaService.book_categories.findUnique.mockResolvedValue({
+        id: 1,
+        name: 'Programming',
+      });
+      mockPrismaService.books.create.mockResolvedValue({
+        id: 10,
+        qr_code: 'QR-001',
+        title: 'Clean Code',
+        author: 'Robert Martin',
+        category_id: 1,
+        total_copies: 5,
+        available_copies: 5,
+        book_categories: { id: 1, name: 'Programming' },
+      });
+
+      const result = await service.create(createDto);
+
+      expect(mockPrismaService.books.findFirst).toHaveBeenCalledWith({
+        where: {
+          title: { equals: createDto.title, mode: 'insensitive' },
+          author: { equals: createDto.author, mode: 'insensitive' },
+        },
+        include: {
+          book_categories: { select: { id: true, name: true } },
+        },
+      });
+      expect(mockPrismaService.books.findUnique).toHaveBeenCalledWith({
+        where: { qr_code: createDto.qr_code },
+      });
+      expect(mockPrismaService.book_categories.findUnique).toHaveBeenCalledWith(
+        {
+          where: { id: createDto.category_id },
+        },
+      );
+      expect(mockPrismaService.books.create).toHaveBeenCalledWith({
+        data: {
+          qr_code: createDto.qr_code,
+          title: createDto.title,
+          author: createDto.author,
+          category_id: createDto.category_id,
+          total_copies: createDto.total_copies,
+          available_copies: createDto.total_copies,
+        },
+        include: {
+          book_categories: { select: { id: true, name: true } },
+        },
+      });
+      expect(result).toEqual({
+        id: 10,
+        qr_code: 'QR-001',
+        title: 'Clean Code',
+        author: 'Robert Martin',
+        category_id: 1,
+        category_name: 'Programming',
+        total_copies: 5,
+        available_copies: 5,
+      });
+    });
+
+    it('should increment copies instead of creating a duplicate when the same title + author already exists', async () => {
+      mockPrismaService.books.findFirst.mockResolvedValue({
+        id: 7,
+        qr_code: 'QR-EXISTING',
+        title: 'Clean Code',
+        author: 'Robert Martin',
+        category_id: 1,
+        total_copies: 3,
+        available_copies: 2,
+        book_categories: { id: 1, name: 'Programming' },
+      });
+      mockPrismaService.books.update.mockResolvedValue({
+        id: 7,
+        qr_code: 'QR-EXISTING',
+        title: 'Clean Code',
+        author: 'Robert Martin',
+        category_id: 1,
+        total_copies: 8,
+        available_copies: 7,
+        book_categories: { id: 1, name: 'Programming' },
+      });
+
+      const result = await service.create(createDto);
+
+      expect(mockPrismaService.books.update).toHaveBeenCalledWith({
+        where: { id: 7 },
+        data: {
+          total_copies: { increment: createDto.total_copies },
+          available_copies: { increment: createDto.total_copies },
+        },
+        include: {
+          book_categories: { select: { id: true, name: true } },
+        },
+      });
+      expect(mockPrismaService.books.findUnique).not.toHaveBeenCalled();
+      expect(
+        mockPrismaService.book_categories.findUnique,
+      ).not.toHaveBeenCalled();
+      expect(mockPrismaService.books.create).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        id: 7,
+        qr_code: 'QR-EXISTING',
+        title: 'Clean Code',
+        author: 'Robert Martin',
+        category_id: 1,
+        category_name: 'Programming',
+        total_copies: 8,
+        available_copies: 7,
+      });
+    });
+
+    it('should throw ConflictException when QR code already exists', async () => {
+      mockPrismaService.books.findFirst.mockResolvedValue(null);
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1 });
+
+      await expect(service.create(createDto)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(
+        mockPrismaService.book_categories.findUnique,
+      ).not.toHaveBeenCalled();
+      expect(mockPrismaService.books.create).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException when category does not exist', async () => {
+      mockPrismaService.books.findFirst.mockResolvedValue(null);
+      mockPrismaService.books.findUnique.mockResolvedValue(null);
+      mockPrismaService.book_categories.findUnique.mockResolvedValue(null);
+
+      await expect(service.create(createDto)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockPrismaService.books.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findAll', () => {
+    it('should return paginated books with default filters', async () => {
+      const books = [
+        {
+          id: 1,
+          qr_code: 'QR-1',
+          title: 'A Book',
+          author: 'Author',
+          total_copies: 2,
+          available_copies: 1,
+          book_categories: { id: 1, name: 'Fiction' },
+        },
+      ];
+      mockPrismaService.books.findMany.mockResolvedValue(books);
+      mockPrismaService.books.count.mockResolvedValue(1);
+
+      const result = await service.findAll({});
+
+      expect(mockPrismaService.$transaction).toHaveBeenCalled();
+      expect(mockPrismaService.books.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {},
+          skip: 0,
+          take: 20,
+          orderBy: { title: 'asc' },
+        }),
+      );
+      expect(result).toEqual({
+        page: 1,
+        page_size: 20,
+        total: 1,
+        data: [
+          {
+            id: 1,
+            qr_code: 'QR-1',
+            title: 'A Book',
+            author: 'Author',
+            total_copies: 2,
+            available_copies: 1,
+            category: { id: 1, name: 'Fiction' },
+          },
+        ],
+      });
+    });
+
+    it('should apply search query, category filter and pagination', async () => {
+      mockPrismaService.books.findMany.mockResolvedValue([]);
+      mockPrismaService.books.count.mockResolvedValue(0);
+
+      await service.findAll({
+        q: 'clean',
+        category_id: 3,
+        available_only: true,
+        page: 2,
+        page_size: 10,
+      });
+
+      expect(mockPrismaService.books.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            OR: [
+              { title: { contains: 'clean', mode: 'insensitive' } },
+              { author: { contains: 'clean', mode: 'insensitive' } },
+            ],
+            category_id: 3,
+            available_copies: { gt: 0 },
+          },
+          skip: 10,
+          take: 10,
+        }),
+      );
+    });
+
+    it('should return empty data set when no books match', async () => {
+      mockPrismaService.books.findMany.mockResolvedValue([]);
+      mockPrismaService.books.count.mockResolvedValue(0);
+
+      const result = await service.findAll({ q: 'nonexistent' });
+
+      expect(result.data).toEqual([]);
+      expect(result.total).toBe(0);
+    });
+  });
+
+  describe('findOne', () => {
+    it('should return a book when found', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue({
+        id: 1,
+        qr_code: 'QR-1',
+        title: 'Title',
+        author: 'Author',
+        category_id: 2,
+        total_copies: 3,
+        available_copies: 2,
+        book_categories: { id: 2, name: 'Category' },
+      });
+
+      const result = await service.findOne(1);
+
+      expect(mockPrismaService.books.findUnique).toHaveBeenCalledWith({
+        where: { id: 1 },
+        include: { book_categories: { select: { id: true, name: true } } },
+      });
+      expect(result.category_name).toBe('Category');
+    });
+
+    it('should throw NotFoundException when book does not exist', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue(null);
+
+      await expect(service.findOne(999)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('update', () => {
+    it('should throw NotFoundException when book does not exist', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue(null);
+
+      await expect(service.update(1, { title: 'New title' })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockPrismaService.books.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException when new QR code belongs to another book', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1 });
+      mockPrismaService.books.findFirst.mockResolvedValue({ id: 2 });
+
+      await expect(service.update(1, { qr_code: 'QR-DUP' })).rejects.toThrow(
+        ConflictException,
+      );
+      expect(mockPrismaService.books.findFirst).toHaveBeenCalledWith({
+        where: { qr_code: 'QR-DUP', NOT: { id: 1 } },
+      });
+      expect(mockPrismaService.books.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException when new category does not exist', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1 });
+      mockPrismaService.book_categories.findUnique.mockResolvedValue(null);
+
+      await expect(service.update(1, { category_id: 99 })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockPrismaService.books.update).not.toHaveBeenCalled();
+    });
+
+    it('should update the book successfully', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1 });
+      mockPrismaService.books.update.mockResolvedValue({
+        id: 1,
+        qr_code: 'QR-1',
+        title: 'Updated title',
+        author: 'Author',
+        category_id: 1,
+        total_copies: 5,
+        available_copies: 5,
+        book_categories: { id: 1, name: 'Programming' },
+      });
+
+      const result = await service.update(1, { title: 'Updated title' });
+
+      expect(mockPrismaService.books.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { title: 'Updated title' },
+        include: { book_categories: { select: { id: true, name: true } } },
+      });
+      expect(result.title).toBe('Updated title');
+    });
+  });
+
+  describe('remove', () => {
+    it('should throw NotFoundException when book does not exist', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue(null);
+
+      await expect(service.remove(1)).rejects.toThrow(NotFoundException);
+      expect(mockPrismaService.books.delete).not.toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException when book is currently borrowed', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1 });
+      mockPrismaService.book_borrow_records.findFirst.mockResolvedValue({
+        id: 5,
+        status: 'borrowed',
+      });
+
+      await expect(service.remove(1)).rejects.toThrow(ConflictException);
+      expect(mockPrismaService.books.delete).not.toHaveBeenCalled();
+    });
+
+    it('should delete the book successfully when not borrowed', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1 });
+      mockPrismaService.book_borrow_records.findFirst.mockResolvedValue(null);
+      mockPrismaService.books.delete.mockResolvedValue({ id: 1 });
+
+      const result = await service.remove(1);
+
+      expect(mockPrismaService.books.delete).toHaveBeenCalledWith({
+        where: { id: 1 },
+      });
+      expect(result).toEqual({ message: 'Book deleted successfully.' });
+    });
+
+    it('should throw ConflictException when the book has existing borrow history (FK violation)', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1 });
+      mockPrismaService.book_borrow_records.findFirst.mockResolvedValue(null);
+      mockPrismaService.books.delete.mockRejectedValue({ code: 'P2003' });
+
+      await expect(service.remove(1)).rejects.toThrow(ConflictException);
+    });
+
+    it('should rethrow unrelated errors from delete', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1 });
+      mockPrismaService.book_borrow_records.findFirst.mockResolvedValue(null);
+      const unrelatedError = new Error('connection lost');
+      mockPrismaService.books.delete.mockRejectedValue(unrelatedError);
+
+      await expect(service.remove(1)).rejects.toThrow(unrelatedError);
+    });
+  });
+
+  describe('searchFuzzy', () => {
+    it('should return matches ordered by similarity with scores exposed', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        {
+          id: 1,
+          qr_code: 'QR-001',
+          title: 'Computer Science Engineering',
+          author: null,
+          category_id: 1,
+          category_name: 'Engineering',
+          total_copies: 3,
+          available_copies: 2,
+          similarity: 0.62,
+        },
+      ]);
+
+      const result = await service.searchFuzzy('computer scince enginering');
+
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(result).toEqual([
+        {
+          id: 1,
+          qr_code: 'QR-001',
+          title: 'Computer Science Engineering',
+          author: null,
+          category_id: 1,
+          category_name: 'Engineering',
+          total_copies: 3,
+          available_copies: 2,
+          similarity: 0.62,
+        },
+      ]);
+    });
+
+    it('should return an empty array when nothing matches', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([]);
+
+      const result = await service.searchFuzzy('zzzqqqxxx');
+
+      expect(result).toEqual([]);
+    });
+
+    it('should cap the limit at 20 even when a larger value is requested', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([]);
+
+      await service.searchFuzzy('computer', 500);
+
+      const templateArgs = mockPrismaService.$queryRaw.mock
+        .calls[0] as unknown[];
+      // Values interpolated into the tagged template are passed as
+      // positional args after the strings array; the limit is the last one.
+      expect(templateArgs[templateArgs.length - 1]).toBe(20);
+    });
   });
 });

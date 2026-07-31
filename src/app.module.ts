@@ -20,6 +20,7 @@ import { OdModule } from './modules/admissions/od/od.module';
 import { SoaApplicationsModule } from './modules/admissions/soa-applications/soa-applications.module';
 import { StudentLeavesModule } from './modules/admissions/student-leaves/student-leaves.module';
 import { StudentsModule } from './modules/admissions/students/students.module';
+import { MeProfileModule } from './modules/admissions/students/me-profile/me-profile.module';
 
 import { AnnouncementsModule } from './modules/announcements/announcements/announcements.module';
 
@@ -68,6 +69,7 @@ import { StudentFeeDemandMappingModule } from './modules/fees-billing/student-fe
 import { TransportRouteModule } from './modules/fees-billing/transport-routes/transport-route.module';
 import { TransportStageModule } from './modules/fees-billing/transport-stages/transport-stage.module';
 
+import { BookCategoriesModule } from './modules/library/book-categories/book-categories.module';
 import { BooksModule } from './modules/library/books/books.module';
 import { BorrowRecordsModule } from './modules/library/borrow-records/borrow-records.module';
 import { EResourcesModule } from './modules/library/e-resources/e-resources.module';
@@ -114,6 +116,7 @@ import { HallTicketClearanceModule } from './modules/hall-ticket-clearance/hall-
     SoaApplicationsModule,
     StudentLeavesModule,
     StudentsModule,
+    MeProfileModule,
 
     AnnouncementsModule,
 
@@ -131,14 +134,21 @@ import { HallTicketClearanceModule } from './modules/hall-ticket-clearance/hall-
     SeatingArrangementsModule,
 
     AppraisalModule,
+    AssignmentsModule,
     AttendanceModule,
+    ClassMentorsModule,
+    ExamMarksModule,
     FacultyLeavesModule,
     FacultyMappingModule,
     FacultyModule,
+    HolidaySlotsModule,
     HrPayrollModule,
     LessonPlansModule,
     LmsNotesModule,
     MediaRequestsModule,
+    PayslipRequestsModule,
+    SalaryDivisionsModule,
+    StudentAssignmentStatusModule,
     TimetableModule,
 
     DemandModule,
@@ -155,6 +165,7 @@ import { HallTicketClearanceModule } from './modules/hall-ticket-clearance/hall-
     TransportRouteModule,
     TransportStageModule,
 
+    BookCategoriesModule,
     BooksModule,
     BorrowRecordsModule,
     EResourcesModule,
@@ -176,6 +187,7 @@ import { HallTicketClearanceModule } from './modules/hall-ticket-clearance/hall-
     VenuesModule,
     NotificationsModule,
     FeedbackModule,
+    HallTicketClearanceModule,
   ],
 
   controllers: [AppController],

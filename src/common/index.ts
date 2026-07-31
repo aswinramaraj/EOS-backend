@@ -12,6 +12,7 @@ export * from './constants/roles.constant';
 // DTOs
 export * from './dto/api-response.dto';
 export * from './dto/pagination.dto';
+export * from './dto/fuzzy-search.dto';
 
 // Filters
 export * from './filters/http-exception.filter';

@@ -1,34 +1,93 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  Body,
+  Post,
+  Patch,
+  Param,
+  ParseIntPipe,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
 import { BorrowRecordsService } from './borrow-records.service';
 import { CreateBorrowRecordDto } from './dto/create-borrow-record.dto';
 import { UpdateBorrowRecordDto } from './dto/update-borrow-record.dto';
+import { SearchBorrowRecordsDto } from './dto/search-borrow-records.dto';
+import { GetMyBorrowRecordsDto } from './dto/get-my-borrow-records.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import type { JwtPayload } from 'src/auth/interfaces/jwt-payload.interface';
 
-@Controller('borrow-records')
+// No class-level @Controller() prefix — each route below declares its own
+// full path so both the `library/borrow-records` resource and the
+// `me/library/borrow-records` student view can live in this one controller
+// (per test/to_create/borrowed.md, which specs the latter as its own
+// endpoint but not its own controller class).
+@Controller()
 export class BorrowRecordsController {
   constructor(private readonly borrowRecordsService: BorrowRecordsService) {}
 
-  @Post()
-  create(@Body() createBorrowRecordDto: CreateBorrowRecordDto) {
-    return this.borrowRecordsService.create(createBorrowRecordDto);
+  @UseGuards(JwtAuthGuard)
+  @Get('library/borrow-records')
+  findAll(
+    @Query() query: SearchBorrowRecordsDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.borrowRecordsService.findAll(query, user);
   }
 
-  @Get()
-  findAll() {
-    return this.borrowRecordsService.findAll();
+  @UseGuards(JwtAuthGuard)
+  @Get('library/borrow-records/:id')
+  findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.borrowRecordsService.findOne(id, user);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.borrowRecordsService.findOne(+id);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('student', 'library', 'admin')
+  @Post('library/borrow-records')
+  create(
+    @Body() dto: CreateBorrowRecordDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.borrowRecordsService.create(dto, user);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateBorrowRecordDto: UpdateBorrowRecordDto) {
-    return this.borrowRecordsService.update(+id, updateBorrowRecordDto);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('library', 'admin')
+  @Patch('library/borrow-records/:id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateBorrowRecordDto,
+  ) {
+    return this.borrowRecordsService.update(id, dto);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.borrowRecordsService.remove(+id);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('library', 'admin')
+  @Delete('library/borrow-records/:id')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.borrowRecordsService.remove(id);
+  }
+
+  // GET /me/library/borrow-records — per test/to_create/borrowed.md:
+  // student-only, self-scoped read of the caller's own borrow history.
+  // Previously served by a separate MeBorrowedController; merged in here so
+  // this one controller owns everything the borrow-records module exposes.
+  // Renamed from the /me/library/borrowed path to use consistent
+  // "borrow-records" wording with the rest of this resource.
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('student')
+  @Get('me/library/borrow-records')
+  findMyBorrowRecords(
+    @Query() query: GetMyBorrowRecordsDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.borrowRecordsService.findMyBorrowRecords(query, user);
   }
 }
