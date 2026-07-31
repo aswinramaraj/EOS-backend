@@ -1253,6 +1253,83 @@ model student_transport_mapping {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model students {
+<<<<<<< HEAD
+  id                               Int                                @id @default(autoincrement())
+  soa_application_id               Int?                               @unique
+  user_id                          Int                                @unique
+  student_id_no                    String                             @unique @db.VarChar(30)
+  roll_no                          String?                            @db.VarChar(30)
+  register_no                      String?                            @db.VarChar(30)
+  admission_no                     String?                            @unique @db.VarChar(30)
+  course_id                        Int
+  quota_id                         Int
+  class_id                         Int?
+  batch_id                         Int
+  admission_date                   DateTime?                          @db.Date
+  admission_type                   String?                            @db.VarChar(50)
+  joined_academic_year             String?                            @db.VarChar(20)
+  gender                           String?                            @db.VarChar(20)
+  date_of_birth                    DateTime?                          @db.Date
+  student_type                     student_type_enum
+  dayscholar_mode                  dayscholar_mode_enum?
+  vehicle_number                   String?                            @db.VarChar(30)
+  status                           user_status_enum                   @default(active)
+  is_first_graduate                Boolean                            @default(false)
+  nationality                      String?                            @db.VarChar(50)
+  religion                         String?                            @db.VarChar(50)
+  community                        String?                            @db.VarChar(50)
+  caste                            String?                            @db.VarChar(50)
+  mother_tongue                    String?                            @db.VarChar(50)
+  blood_group                      String?                            @db.VarChar(10)
+  is_father_exserviceman           Boolean                            @default(false)
+  exserviceman_info                String?                            @db.VarChar(255)
+  is_diff_abled                    Boolean                            @default(false)
+  diff_abled_info                  String?                            @db.VarChar(255)
+  counselling_order_no             String?                            @db.VarChar(50)
+  counselling_rank_no              String?                            @db.VarChar(50)
+  govt_quota_admission_no          String?                            @db.VarChar(50)
+  joined_through                   String?                            @db.VarChar(100)
+  knew_institution_by              String?                            @db.VarChar(100)
+  nominee                          String?                            @db.VarChar(150)
+  created_at                       DateTime                           @default(now()) @db.Timestamptz(6)
+  attendance_records               attendance_records[]
+  bonafide_requests                bonafide_requests[]
+  book_borrow_records              book_borrow_records[]
+  exam_marks                       exam_marks[]
+  feedback_responses               feedback_responses[]
+  hall_ticket_clearance_exceptions hall_ticket_clearance_exceptions[]
+  hall_tickets                     hall_tickets[]
+  hostel_in_out_ledger             hostel_in_out_ledger[]
+  hostel_outings                   hostel_outings[]
+  main_gate_in_out_ledger          main_gate_in_out_ledger[]
+  marksheets                       marksheets[]
+  od_request_hod_approvals         od_request_hod_approvals[]
+  od_team_members                  od_team_members[]
+  od_teams                         od_teams[]
+  parent_student_mapping           parent_student_mapping[]
+  revaluation_requests             revaluation_requests[]
+  seating_arrangements             seating_arrangements[]
+  student_addresses                student_addresses[]
+  student_assignment_status        student_assignment_status[]
+  student_certificates             student_certificates[]
+  student_contacts                 student_contacts?
+  student_drive_applications       student_drive_applications[]
+  student_family_details           student_family_details?
+  student_fee_demand_mapping       student_fee_demand_mapping[]
+  student_hostel_mapping           student_hostel_mapping?
+  student_identity_marks           student_identity_marks[]
+  student_leaves                   student_leaves[]
+  student_profiles                 student_profiles?
+  student_projects                 student_projects[]
+  student_sensitive_info           student_sensitive_info?
+  student_transport_mapping        student_transport_mapping?
+  batches                          batches                            @relation(fields: [batch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  classes                          classes?                           @relation(fields: [class_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  courses                          courses                            @relation(fields: [course_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  quotas                           quotas                             @relation(fields: [quota_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  soa_applications                 soa_applications?                  @relation(fields: [soa_application_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                            users                              @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+=======
   id                                                                Int                                @id @default(autoincrement())
   soa_application_id                                                Int?                               @unique
   user_id                                                           Int                                @unique
@@ -1332,6 +1409,7 @@ model students {
   quotas                                                            quotas                             @relation(fields: [quota_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   soa_applications                                                  soa_applications?                  @relation(fields: [soa_application_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users                                                             users                              @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+>>>>>>> ee45987a03b5d6cf093354c72b08b130899ff463
 
   @@index([batch_id], map: "idx_students_batch")
   @@index([class_id], map: "idx_students_class")
@@ -1541,6 +1619,8 @@ model hall_ticket_clearance_exceptions {
   @@index([student_id, exam_id], map: "idx_clearance_exceptions_student_exam")
 }
 
+<<<<<<< HEAD
+=======
 model project_join_requests {
   id                                                   Int           @id @default(autoincrement())
   team_id                                              Int
@@ -1617,6 +1697,7 @@ model project_teams {
   @@index([status], map: "idx_project_teams_status")
 }
 
+>>>>>>> ee45987a03b5d6cf093354c72b08b130899ff463
 enum address_type_enum {
   permanent
   temporary
@@ -1805,6 +1886,21 @@ enum venue_booking_status_enum {
   alternative_offered
 }
 
+<<<<<<< HEAD
+enum clearance_exception_status_enum {
+  pending
+  approved
+  rejected
+}
+
+enum clearance_type_enum {
+  fee_due
+  no_due
+  library_due
+}
+
+=======
+>>>>>>> ee45987a03b5d6cf093354c72b08b130899ff463
 enum feedback_question_type_enum {
   rating
   text
@@ -1817,6 +1913,8 @@ enum feedback_rating_label_enum {
   satisfactory
   need_improvement
 }
+<<<<<<< HEAD
+=======
 
 enum clearance_exception_status_enum {
   pending
@@ -1829,3 +1927,4 @@ enum clearance_type_enum {
   no_due
   library_due
 }
+>>>>>>> ee45987a03b5d6cf093354c72b08b130899ff463
