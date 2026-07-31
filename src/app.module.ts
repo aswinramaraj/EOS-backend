@@ -60,6 +60,7 @@ import { VendorsModule } from './modules/procurement/vendors/vendors.module';
 import { VenuesModule } from './modules/venues/venues/venues.module';
 import { NotificationsModule } from './modules/notifications/notifications/notifications.module';
 import { FeedbackModule } from './modules/feedback/feedback/feedback.module';
+import { HallTicketClearanceModule } from './modules/hall-ticket-clearance/hall-ticket-clearance.module';
 
 @Module({
   imports: [
@@ -125,6 +126,7 @@ import { FeedbackModule } from './modules/feedback/feedback/feedback.module';
     VenuesModule,
     NotificationsModule,
     FeedbackModule,
+    HallTicketClearanceModule,
   ],
   controllers: [AppController],
   providers: [

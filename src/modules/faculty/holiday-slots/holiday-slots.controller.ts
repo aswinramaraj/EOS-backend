@@ -30,7 +30,7 @@ import { ListHolidayMappingQueryDto } from './dto/list-holiday-mapping-query.dto
  * top-level paths (holiday-slots/..., me/holiday-mapping/..., and
  * holiday-mapping/...), same trick as VenuesController/AnnouncementsController.
  */
-@Controller('me')
+@Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class HolidaySlotsController {
   constructor(private readonly holidaySlotsService: HolidaySlotsService) {}
