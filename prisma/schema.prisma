@@ -633,6 +633,27 @@ model hall_plans {
   seating_arrangements seating_arrangements[]
 }
 
+model hall_ticket_clearance_exceptions {
+  id                      Int                             @id @default(autoincrement())
+  student_id              Int
+  exam_id                 Int
+  clearance_type          clearance_type_enum
+  reason                  String?                         @db.VarChar(500)
+  letter_file_url         String?                         @db.VarChar(500)
+  requested_at            DateTime                        @default(now()) @db.Timestamptz(6)
+  status                  clearance_exception_status_enum @default(pending)
+  reviewed_by_hod_user_id Int?
+  reviewed_at             DateTime?                       @db.Timestamptz(6)
+  valid_until             DateTime?                       @db.Date
+  exams                   exams                           @relation(fields: [exam_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                   users?                          @relation(fields: [reviewed_by_hod_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  students                students                        @relation(fields: [student_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([student_id, exam_id, clearance_type], map: "hall_ticket_clearance_excepti_student_id_exam_id_clearance__key")
+  @@index([status], map: "idx_clearance_exceptions_status")
+  @@index([student_id, exam_id], map: "idx_clearance_exceptions_student_exam")
+}
+
 model hall_tickets {
   id           Int      @id @default(autoincrement())
   exam_id      Int
@@ -1662,6 +1683,19 @@ enum borrower_type_enum {
 enum calendar_event_type_enum {
   holiday
   event
+}
+
+enum clearance_exception_status_enum {
+  pending
+  approved
+  rejected
+  expired
+}
+
+enum clearance_type_enum {
+  FEE_EXCEPTION
+  DOCUMENT_PENDING
+  OTHER
 }
 
 enum dayscholar_mode_enum {

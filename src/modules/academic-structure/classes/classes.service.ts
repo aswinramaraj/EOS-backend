@@ -9,6 +9,24 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
+import { AssignMentorDto } from './dto/assign-mentor.dto';
+
+function prismaErrorCode(err: unknown): string | undefined {
+  return typeof err === 'object' && err !== null && 'code' in err
+    ? (err as { code?: string }).code
+    : undefined;
+}
+
+const MENTOR_SELECT = {
+  id: true,
+  class_id: true,
+  faculty_id: true,
+  academic_year: true,
+  assigned_by_user_id: true,
+  faculty: {
+    select: { id: true, first_name: true, last_name: true, designation: true },
+  },
+} as const;
 
 @Injectable()
 export class ClassesService {

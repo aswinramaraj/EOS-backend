@@ -37,14 +37,21 @@ import { RevaluationModule } from './modules/exams/revaluation/revaluation.modul
 import { SeatingArrangementsModule } from './modules/exams/seating-arrangements/seating-arrangements.module';
 
 import { AppraisalModule } from './modules/faculty/appraisal/appraisal.module';
+import { AssignmentsModule } from './modules/faculty/assignments/assignments.module';
 import { AttendanceModule } from './modules/faculty/attendance/attendance.module';
+import { ClassMentorsModule } from './modules/faculty/class-mentors/class-mentors.module';
+import { ExamMarksModule } from './modules/faculty/exam-marks/exam-marks.module';
 import { FacultyLeavesModule } from './modules/faculty/faculty-leaves/faculty-leaves.module';
 import { FacultyMappingModule } from './modules/faculty/faculty-mapping/faculty-mapping.module';
 import { FacultyModule } from './modules/faculty/faculty/faculty.module';
+import { HolidaySlotsModule } from './modules/faculty/holiday-slots/holiday-slots.module';
 import { HrPayrollModule } from './modules/faculty/hr-payroll/hr-payroll.module';
 import { LessonPlansModule } from './modules/faculty/lesson-plans/lesson-plans.module';
 import { LmsNotesModule } from './modules/faculty/lms-notes/lms-notes.module';
 import { MediaRequestsModule } from './modules/faculty/media-requests/media-requests.module';
+import { PayslipRequestsModule } from './modules/faculty/payslip-requests/payslip-requests.module';
+import { SalaryDivisionsModule } from './modules/faculty/salary-divisions/salary-divisions.module';
+import { StudentAssignmentStatusModule } from './modules/faculty/student-assignment-status/student-assignment-status.module';
 import { TimetableModule } from './modules/faculty/timetable/timetable.module';
 
 import { DemandModule } from './modules/fees-billing/demand/demand.module';
@@ -82,6 +89,7 @@ import { VendorsModule } from './modules/procurement/vendors/vendors.module';
 import { VenuesModule } from './modules/venues/venues/venues.module';
 import { NotificationsModule } from './modules/notifications/notifications/notifications.module';
 import { FeedbackModule } from './modules/feedback/feedback/feedback.module';
+import { HallTicketClearanceModule } from './modules/hall-ticket-clearance/hall-ticket-clearance.module';
 
 @Module({
   imports: [
