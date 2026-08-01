@@ -10,6 +10,11 @@ export class CreateBusDto {
   @MaxLength(30)
   vehicle_number: string;
 
+  @Transform(trim)
+  @IsString()
+  @IsNotEmpty()
+  bus_no: string;
+
   @ValidateIf((dto) => dto.route_id !== undefined)
   @IsInt()
   route_id?: number;

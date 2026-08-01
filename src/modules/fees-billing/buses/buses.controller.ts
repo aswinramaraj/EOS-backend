@@ -35,6 +35,7 @@ export class BusesController {
    *  403 FORBIDDEN                 – authenticated user is not an admin
    *  404 TRANSPORT_ROUTE_NOT_FOUND – route_id does not exist
    *  409 BUS_VEHICLE_NUMBER_EXISTS – a bus with the same vehicle_number already exists
+   *  409 BUS_NO_EXISTS             – a bus with the same bus_no already exists
    *  500 INTERNAL_ERROR            – unexpected server failure
    */
   @Post()
@@ -93,6 +94,7 @@ export class BusesController {
    *  404 BUS_NOT_FOUND             – no bus with the given id
    *  404 TRANSPORT_ROUTE_NOT_FOUND – route_id does not exist
    *  409 BUS_VEHICLE_NUMBER_EXISTS – another bus already uses this vehicle_number
+   *  409 BUS_NO_EXISTS             – another bus already uses this bus_no
    *  500 INTERNAL_ERROR            – unexpected server failure
    */
   @Put(':id')

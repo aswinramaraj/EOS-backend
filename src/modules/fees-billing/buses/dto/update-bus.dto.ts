@@ -11,6 +11,12 @@ export class UpdateBusDto {
   @MaxLength(30)
   vehicle_number?: string;
 
+  @ValidateIf((dto) => dto.bus_no !== undefined)
+  @Transform(trim)
+  @IsString()
+  @IsNotEmpty()
+  bus_no?: string;
+
   @IsOptional()
   @IsInt()
   route_id?: number | null;

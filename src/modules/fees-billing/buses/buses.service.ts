@@ -21,6 +21,7 @@ export class BusesService {
    * Error cases:
    *  404 TRANSPORT_ROUTE_NOT_FOUND  – route_id does not exist
    *  409 BUS_VEHICLE_NUMBER_EXISTS – a bus with the same vehicle_number already exists
+   *  409 BUS_NO_EXISTS             – a bus with the same bus_no already exists
    *  500 INTERNAL_ERROR            – unexpected failure (DB, etc.)
    */
   async create(dto: CreateBusDto) {
@@ -28,12 +29,21 @@ export class BusesService {
       await this.assertRouteExists(dto.route_id);
     }
 
-    const existing = await this.findByVehicleNumber(dto.vehicle_number);
+    const existingByVehicleNumber = await this.findByVehicleNumber(dto.vehicle_number);
 
-    if (existing) {
+    if (existingByVehicleNumber) {
       throw new ConflictException({
         message: 'A bus with this vehicle number already exists',
         errorCode: 'BUS_VEHICLE_NUMBER_EXISTS',
+      });
+    }
+
+    const existingByBusNo = await this.findByBusNo(dto.bus_no);
+
+    if (existingByBusNo) {
+      throw new ConflictException({
+        message: 'A bus with this bus number already exists',
+        errorCode: 'BUS_NO_EXISTS',
       });
     }
 
@@ -41,6 +51,7 @@ export class BusesService {
       return await this.prisma.buses.create({
         data: {
           vehicle_number: dto.vehicle_number,
+          bus_no: dto.bus_no,
           route_id: dto.route_id,
           driver_name: dto.driver_name,
           gps_device_id: dto.gps_device_id,
@@ -98,6 +109,7 @@ export class BusesService {
    *  404 BUS_NOT_FOUND              – no bus with the given id
    *  404 TRANSPORT_ROUTE_NOT_FOUND  – route_id does not exist
    *  409 BUS_VEHICLE_NUMBER_EXISTS  – another bus already uses this vehicle_number
+   *  409 BUS_NO_EXISTS              – another bus already uses this bus_no
    *  500 INTERNAL_ERROR             – unexpected failure (DB, etc.)
    */
   async update(id: number, dto: UpdateBusDto) {
@@ -115,12 +127,23 @@ export class BusesService {
     }
 
     if (dto.vehicle_number !== undefined) {
-      const existing = await this.findByVehicleNumber(dto.vehicle_number);
+      const existingByVehicleNumber = await this.findByVehicleNumber(dto.vehicle_number);
 
-      if (existing && existing.id !== id) {
+      if (existingByVehicleNumber && existingByVehicleNumber.id !== id) {
         throw new ConflictException({
           message: 'A bus with this vehicle number already exists',
           errorCode: 'BUS_VEHICLE_NUMBER_EXISTS',
+        });
+      }
+    }
+
+    if (dto.bus_no !== undefined) {
+      const existingByBusNo = await this.findByBusNo(dto.bus_no);
+
+      if (existingByBusNo && existingByBusNo.id !== id) {
+        throw new ConflictException({
+          message: 'A bus with this bus number already exists',
+          errorCode: 'BUS_NO_EXISTS',
         });
       }
     }
@@ -130,6 +153,7 @@ export class BusesService {
         where: { id },
         data: {
           vehicle_number: dto.vehicle_number,
+          bus_no: dto.bus_no,
           route_id: dto.route_id,
           driver_name: dto.driver_name,
           gps_device_id: dto.gps_device_id,
@@ -234,6 +258,18 @@ export class BusesService {
   private async findByVehicleNumber(vehicleNumber: string) {
     try {
       return await this.prisma.buses.findUnique({ where: { vehicle_number: vehicleNumber } });
+    } catch (err) {
+      this.logger.error('DB error during bus duplicate check', err);
+      throw new InternalServerErrorException({
+        message: 'Something went wrong. Please try again.',
+        errorCode: 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  private async findByBusNo(busNo: string) {
+    try {
+      return await this.prisma.buses.findUnique({ where: { bus_no: busNo } });
     } catch (err) {
       this.logger.error('DB error during bus duplicate check', err);
       throw new InternalServerErrorException({

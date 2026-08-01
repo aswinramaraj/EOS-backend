@@ -53,6 +53,7 @@ import { FeedbackModule } from './modules/feedback/feedback/feedback.module';
 import { DemandModule } from './modules/fees-billing/demand/demand.module';
 import { EducationLoanDdModule } from './modules/fees-billing/education-loan-dd/education-loan-dd.module';
 import { BusesModule } from './modules/fees-billing/buses/buses.module';
+import { BusLiveLocationsModule } from './modules/fees-billing/bus-live-locations/bus-live-locations.module';
 import { FeeConcessionModule } from './modules/fees-billing/fee-concessions/fee-concession.module';
 import { FeePaymentModule } from './modules/fees-billing/fee-payments/fee-payment.module';
 import { FeeStructureItemModule } from './modules/fees-billing/fee-structure-items/fee-structure-item.module';
@@ -60,6 +61,8 @@ import { HostelRoomModule } from './modules/fees-billing/hostel-rooms/hostel-roo
 import { HostelRoomTypeModule } from './modules/fees-billing/hostel-room-types/hostel-room-type.module';
 import { QuotaModule } from './modules/fees-billing/quota/quota.module';
 import { StudentFeeDemandMappingModule } from './modules/fees-billing/student-fee-demand-mapping/student-fee-demand-mapping.module';
+import { StudentHostelMappingsModule } from './modules/fees-billing/student-hostel-mapping/student-hostel-mappings.module';
+import { StudentTransportMappingModule } from './modules/fees-billing/student-transport-mapping/student-transport-mapping.module';
 import { TransportRouteModule } from './modules/fees-billing/transport-routes/transport-route.module';
 import { TransportStageModule } from './modules/fees-billing/transport-stages/transport-stage.module';
 import { PurchaseIndentsModule } from './modules/procurement/purchase-indents/purchase-indents.module';
@@ -110,6 +113,7 @@ import { VendorQuotationsModule } from './modules/procurement/vendor-quotations/
     TimetableModule,
 
     BusesModule,
+    BusLiveLocationsModule,
     DemandModule,
     EducationLoanDdModule,
     FeeConcessionModule,
@@ -121,6 +125,8 @@ import { VendorQuotationsModule } from './modules/procurement/vendor-quotations/
     HostelRoomTypeModule,
     QuotaModule,
     StudentFeeDemandMappingModule,
+    StudentHostelMappingsModule,
+    StudentTransportMappingModule,
     TransportRouteModule,
     TransportStageModule,
 
