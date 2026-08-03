@@ -3,9 +3,15 @@ jest.mock('src/prisma/prisma.service', () => ({
 }));
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { BooksService } from './books.service';
 import { PrismaService } from 'src/prisma/prisma.service';
+
+const BOOK_INCLUDE = {
+  book_categories: { select: { id: true, name: true } },
+  departments: { select: { id: true, name: true, code: true } },
+  library_racks: { select: { id: true, rack_code: true, subject_range: true } },
+};
 
 describe('BooksService', () => {
   let service: BooksService;
@@ -21,6 +27,12 @@ describe('BooksService', () => {
       count: jest.fn(),
     },
     book_categories: {
+      findUnique: jest.fn(),
+    },
+    departments: {
+      findUnique: jest.fn(),
+    },
+    library_racks: {
       findUnique: jest.fn(),
     },
     book_borrow_records: {
@@ -74,10 +86,17 @@ describe('BooksService', () => {
         qr_code: 'QR-001',
         title: 'Clean Code',
         author: 'Robert Martin',
+        isbn: null,
+        publisher: null,
+        edition: null,
         category_id: 1,
         total_copies: 5,
         available_copies: 5,
+        price_per_copy: null,
+        vendor_fund: null,
         book_categories: { id: 1, name: 'Programming' },
+        departments: null,
+        library_racks: null,
       });
 
       const result = await service.create(createDto);
@@ -86,10 +105,9 @@ describe('BooksService', () => {
         where: {
           title: { equals: createDto.title, mode: 'insensitive' },
           author: { equals: createDto.author, mode: 'insensitive' },
+          edition: null,
         },
-        include: {
-          book_categories: { select: { id: true, name: true } },
-        },
+        include: BOOK_INCLUDE,
       });
       expect(mockPrismaService.books.findUnique).toHaveBeenCalledWith({
         where: { qr_code: createDto.qr_code },
@@ -99,32 +117,105 @@ describe('BooksService', () => {
           where: { id: createDto.category_id },
         },
       );
+      expect(mockPrismaService.departments.findUnique).not.toHaveBeenCalled();
+      expect(mockPrismaService.library_racks.findUnique).not.toHaveBeenCalled();
       expect(mockPrismaService.books.create).toHaveBeenCalledWith({
         data: {
           qr_code: createDto.qr_code,
           title: createDto.title,
           author: createDto.author,
+          isbn: undefined,
+          publisher: undefined,
+          edition: undefined,
           category_id: createDto.category_id,
+          department_id: undefined,
+          rack_id: undefined,
           total_copies: createDto.total_copies,
           available_copies: createDto.total_copies,
+          price_per_copy: undefined,
+          vendor_fund: undefined,
         },
-        include: {
-          book_categories: { select: { id: true, name: true } },
-        },
+        include: BOOK_INCLUDE,
       });
       expect(result).toEqual({
         id: 10,
         qr_code: 'QR-001',
         title: 'Clean Code',
         author: 'Robert Martin',
+        isbn: null,
+        publisher: null,
+        edition: null,
         category_id: 1,
         category_name: 'Programming',
+        department: null,
+        rack: null,
         total_copies: 5,
         available_copies: 5,
+        price_per_copy: null,
+        vendor_fund: null,
       });
     });
 
-    it('should increment copies instead of creating a duplicate when the same title + author already exists', async () => {
+    it('should reject when available_copies exceeds total_copies', async () => {
+      await expect(
+        service.create({ ...createDto, available_copies: 99 }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrismaService.books.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should set available_copies independently when given ("copies on shelf")', async () => {
+      mockPrismaService.books.findFirst.mockResolvedValue(null);
+      mockPrismaService.books.findUnique.mockResolvedValue(null);
+      mockPrismaService.book_categories.findUnique.mockResolvedValue({
+        id: 1,
+        name: 'Programming',
+      });
+      mockPrismaService.books.create.mockResolvedValue({
+        id: 10,
+        qr_code: 'QR-001',
+        title: 'Clean Code',
+        author: 'Robert Martin',
+        isbn: null,
+        publisher: null,
+        edition: null,
+        category_id: 1,
+        total_copies: 5,
+        available_copies: 3,
+        price_per_copy: null,
+        vendor_fund: null,
+        book_categories: { id: 1, name: 'Programming' },
+        departments: null,
+        library_racks: null,
+      });
+
+      await service.create({ ...createDto, available_copies: 3 });
+
+      expect(mockPrismaService.books.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            total_copies: 5,
+            available_copies: 3,
+          }),
+        }),
+      );
+    });
+
+    it('should validate department_id and rack_id when given', async () => {
+      mockPrismaService.books.findFirst.mockResolvedValue(null);
+      mockPrismaService.books.findUnique.mockResolvedValue(null);
+      mockPrismaService.book_categories.findUnique.mockResolvedValue({
+        id: 1,
+        name: 'Programming',
+      });
+      mockPrismaService.departments.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.create({ ...createDto, department_id: 99 }),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrismaService.books.create).not.toHaveBeenCalled();
+    });
+
+    it('should increment copies instead of creating a duplicate when the same title + author + edition already exists', async () => {
       mockPrismaService.books.findFirst.mockResolvedValue({
         id: 7,
         qr_code: 'QR-EXISTING',
@@ -134,16 +225,25 @@ describe('BooksService', () => {
         total_copies: 3,
         available_copies: 2,
         book_categories: { id: 1, name: 'Programming' },
+        departments: null,
+        library_racks: null,
       });
       mockPrismaService.books.update.mockResolvedValue({
         id: 7,
         qr_code: 'QR-EXISTING',
         title: 'Clean Code',
         author: 'Robert Martin',
+        isbn: null,
+        publisher: null,
+        edition: null,
         category_id: 1,
         total_copies: 8,
         available_copies: 7,
+        price_per_copy: null,
+        vendor_fund: null,
         book_categories: { id: 1, name: 'Programming' },
+        departments: null,
+        library_racks: null,
       });
 
       const result = await service.create(createDto);
@@ -154,9 +254,7 @@ describe('BooksService', () => {
           total_copies: { increment: createDto.total_copies },
           available_copies: { increment: createDto.total_copies },
         },
-        include: {
-          book_categories: { select: { id: true, name: true } },
-        },
+        include: BOOK_INCLUDE,
       });
       expect(mockPrismaService.books.findUnique).not.toHaveBeenCalled();
       expect(
@@ -168,10 +266,17 @@ describe('BooksService', () => {
         qr_code: 'QR-EXISTING',
         title: 'Clean Code',
         author: 'Robert Martin',
+        isbn: null,
+        publisher: null,
+        edition: null,
         category_id: 1,
         category_name: 'Programming',
+        department: null,
+        rack: null,
         total_copies: 8,
         available_copies: 7,
+        price_per_copy: null,
+        vendor_fund: null,
       });
     });
 
@@ -208,9 +313,16 @@ describe('BooksService', () => {
           qr_code: 'QR-1',
           title: 'A Book',
           author: 'Author',
+          isbn: null,
+          publisher: null,
+          edition: null,
           total_copies: 2,
           available_copies: 1,
+          price_per_copy: null,
+          vendor_fund: null,
           book_categories: { id: 1, name: 'Fiction' },
+          departments: null,
+          library_racks: null,
         },
       ];
       mockPrismaService.books.findMany.mockResolvedValue(books);
@@ -237,9 +349,17 @@ describe('BooksService', () => {
             qr_code: 'QR-1',
             title: 'A Book',
             author: 'Author',
+            isbn: null,
+            publisher: null,
+            edition: null,
+            category_id: undefined,
+            category_name: 'Fiction',
+            department: null,
+            rack: null,
             total_copies: 2,
             available_copies: 1,
-            category: { id: 1, name: 'Fiction' },
+            price_per_copy: null,
+            vendor_fund: null,
           },
         ],
       });
@@ -273,6 +393,19 @@ describe('BooksService', () => {
       );
     });
 
+    it('should apply the department and rack filters', async () => {
+      mockPrismaService.books.findMany.mockResolvedValue([]);
+      mockPrismaService.books.count.mockResolvedValue(0);
+
+      await service.findAll({ department_id: 4, rack_id: 9 });
+
+      expect(mockPrismaService.books.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { department_id: 4, rack_id: 9 },
+        }),
+      );
+    });
+
     it('should return empty data set when no books match', async () => {
       mockPrismaService.books.findMany.mockResolvedValue([]);
       mockPrismaService.books.count.mockResolvedValue(0);
@@ -291,17 +424,24 @@ describe('BooksService', () => {
         qr_code: 'QR-1',
         title: 'Title',
         author: 'Author',
+        isbn: null,
+        publisher: null,
+        edition: null,
         category_id: 2,
         total_copies: 3,
         available_copies: 2,
+        price_per_copy: null,
+        vendor_fund: null,
         book_categories: { id: 2, name: 'Category' },
+        departments: null,
+        library_racks: null,
       });
 
       const result = await service.findOne(1);
 
       expect(mockPrismaService.books.findUnique).toHaveBeenCalledWith({
         where: { id: 1 },
-        include: { book_categories: { select: { id: true, name: true } } },
+        include: BOOK_INCLUDE,
       });
       expect(result.category_name).toBe('Category');
     });
@@ -323,8 +463,20 @@ describe('BooksService', () => {
       expect(mockPrismaService.books.update).not.toHaveBeenCalled();
     });
 
+    it('should reject when available_copies exceeds the (possibly updated) total_copies', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue({
+        id: 1,
+        total_copies: 5,
+      });
+
+      await expect(
+        service.update(1, { available_copies: 10 }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrismaService.books.update).not.toHaveBeenCalled();
+    });
+
     it('should throw ConflictException when new QR code belongs to another book', async () => {
-      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1 });
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1, total_copies: 1 });
       mockPrismaService.books.findFirst.mockResolvedValue({ id: 2 });
 
       await expect(service.update(1, { qr_code: 'QR-DUP' })).rejects.toThrow(
@@ -337,7 +489,7 @@ describe('BooksService', () => {
     });
 
     it('should throw NotFoundException when new category does not exist', async () => {
-      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1 });
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1, total_copies: 1 });
       mockPrismaService.book_categories.findUnique.mockResolvedValue(null);
 
       await expect(service.update(1, { category_id: 99 })).rejects.toThrow(
@@ -346,17 +498,44 @@ describe('BooksService', () => {
       expect(mockPrismaService.books.update).not.toHaveBeenCalled();
     });
 
+    it('should throw NotFoundException when new department does not exist', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1, total_copies: 1 });
+      mockPrismaService.departments.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.update(1, { department_id: 99 }),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrismaService.books.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException when new rack does not exist', async () => {
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1, total_copies: 1 });
+      mockPrismaService.library_racks.findUnique.mockResolvedValue(null);
+
+      await expect(service.update(1, { rack_id: 99 })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockPrismaService.books.update).not.toHaveBeenCalled();
+    });
+
     it('should update the book successfully', async () => {
-      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1 });
+      mockPrismaService.books.findUnique.mockResolvedValue({ id: 1, total_copies: 5 });
       mockPrismaService.books.update.mockResolvedValue({
         id: 1,
         qr_code: 'QR-1',
         title: 'Updated title',
         author: 'Author',
+        isbn: null,
+        publisher: null,
+        edition: null,
         category_id: 1,
         total_copies: 5,
         available_copies: 5,
+        price_per_copy: null,
+        vendor_fund: null,
         book_categories: { id: 1, name: 'Programming' },
+        departments: null,
+        library_racks: null,
       });
 
       const result = await service.update(1, { title: 'Updated title' });
@@ -364,7 +543,7 @@ describe('BooksService', () => {
       expect(mockPrismaService.books.update).toHaveBeenCalledWith({
         where: { id: 1 },
         data: { title: 'Updated title' },
-        include: { book_categories: { select: { id: true, name: true } } },
+        include: BOOK_INCLUDE,
       });
       expect(result.title).toBe('Updated title');
     });
@@ -428,10 +607,20 @@ describe('BooksService', () => {
           qr_code: 'QR-001',
           title: 'Computer Science Engineering',
           author: null,
+          isbn: null,
+          publisher: null,
+          edition: null,
           category_id: 1,
           category_name: 'Engineering',
+          department_id: null,
+          department_name: null,
+          department_code: null,
+          rack_id: null,
+          rack_code: null,
           total_copies: 3,
           available_copies: 2,
+          price_per_copy: null,
+          vendor_fund: null,
           similarity: 0.62,
         },
       ]);
@@ -445,10 +634,17 @@ describe('BooksService', () => {
           qr_code: 'QR-001',
           title: 'Computer Science Engineering',
           author: null,
+          isbn: null,
+          publisher: null,
+          edition: null,
           category_id: 1,
           category_name: 'Engineering',
+          department: null,
+          rack: null,
           total_copies: 3,
           available_copies: 2,
+          price_per_copy: null,
+          vendor_fund: null,
           similarity: 0.62,
         },
       ]);

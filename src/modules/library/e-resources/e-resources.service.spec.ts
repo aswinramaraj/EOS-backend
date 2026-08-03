@@ -71,7 +71,7 @@ describe('EResourcesService', () => {
         book_categories: { id: 1, name: 'Engineering' },
       });
 
-      const result = await service.create(createDto);
+      const result = await service.create(createDto, 99);
 
       expect(mockPrismaService.book_categories.findUnique).toHaveBeenCalledWith(
         { where: { id: 1 } },
@@ -86,6 +86,13 @@ describe('EResourcesService', () => {
           title: createDto.title,
           url: createDto.url,
           category_id: createDto.category_id,
+          format: undefined,
+          file_size_bytes: undefined,
+          pages: undefined,
+          license_type: undefined,
+          concurrent_seats: undefined,
+          publish_state: undefined,
+          uploaded_by_user_id: 99,
         },
         include: {
           book_categories: { select: { id: true, name: true } },
@@ -110,10 +117,13 @@ describe('EResourcesService', () => {
         book_categories: null,
       });
 
-      const result = await service.create({
-        title: 'Open Access Journal',
-        url: 'https://example.com',
-      });
+      const result = await service.create(
+        {
+          title: 'Open Access Journal',
+          url: 'https://example.com',
+        },
+        99,
+      );
 
       expect(
         mockPrismaService.book_categories.findUnique,
@@ -124,7 +134,7 @@ describe('EResourcesService', () => {
     it('should throw NotFoundException when category does not exist', async () => {
       mockPrismaService.book_categories.findUnique.mockResolvedValue(null);
 
-      await expect(service.create(createDto)).rejects.toThrow(
+      await expect(service.create(createDto, 99)).rejects.toThrow(
         NotFoundException,
       );
       expect(mockPrismaService.e_resources.create).not.toHaveBeenCalled();
@@ -140,7 +150,7 @@ describe('EResourcesService', () => {
         url: 'https://ieeexplore.ieee.org',
       });
 
-      await expect(service.create(createDto)).rejects.toThrow(
+      await expect(service.create(createDto, 99)).rejects.toThrow(
         ConflictException,
       );
       expect(mockPrismaService.e_resources.create).not.toHaveBeenCalled();

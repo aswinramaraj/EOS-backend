@@ -20,6 +20,18 @@ export class SearchBooksDto {
   category_id?: number;
 
   @IsOptional()
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1)
+  department_id?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1)
+  rack_id?: number;
+
+  @IsOptional()
   @Transform(({ value }) => value === 'true')
   @IsBoolean()
   available_only?: boolean = false;

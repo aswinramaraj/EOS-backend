@@ -70,9 +70,46 @@ export class BorrowRecordsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('library', 'admin')
+  @Patch('library/borrow-records/:id/collect-fine')
+  collectFine(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.borrowRecordsService.collectFine(id, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('library', 'admin')
+  @Patch('library/borrow-records/:id/settle-charge')
+  settleDamageLostCharge(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.borrowRecordsService.settleDamageLostCharge(id, user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('library', 'admin')
   @Delete('library/borrow-records/:id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.borrowRecordsService.remove(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('library', 'admin')
+  @Post('library/borrow-records/send-overdue-reminders')
+  sendOverdueReminders() {
+    return this.borrowRecordsService.sendOverdueReminders();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('library', 'admin')
+  @Patch('library/borrow-records/:id/create-replacement-indent')
+  createReplacementIndent(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.borrowRecordsService.createReplacementIndent(id, user);
   }
 
   // GET /me/library/borrow-records — per test/to_create/borrowed.md:

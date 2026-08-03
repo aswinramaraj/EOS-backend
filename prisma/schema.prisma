@@ -153,20 +153,33 @@ model bonafide_requests {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model book_borrow_records {
-  id              Int                @id @default(autoincrement())
-  book_id         Int
-  borrower_type   borrower_type_enum
-  student_id      Int?
-  faculty_id      Int?
-  borrowed_date   DateTime           @default(dbgenerated("CURRENT_DATE")) @db.Date
-  due_date        DateTime           @db.Date
-  returned_date   DateTime?          @db.Date
-  status          borrow_status_enum @default(borrowed)
-  renewal_count   Int                @default(0) @db.SmallInt
-  last_renewed_at DateTime?          @db.Timestamptz(6)
-  books           books              @relation(fields: [book_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  faculty         faculty?           @relation(fields: [faculty_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  students        students?          @relation(fields: [student_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                               Int                @id @default(autoincrement())
+  book_id                          Int
+  borrower_type                    borrower_type_enum
+  student_id                       Int?
+  faculty_id                       Int?
+  borrowed_date                    DateTime           @default(dbgenerated("CURRENT_DATE")) @db.Date
+  due_date                         DateTime           @db.Date
+  returned_date                    DateTime?          @db.Date
+  status                           borrow_status_enum @default(borrowed)
+  renewal_count                    Int                @default(0) @db.SmallInt
+  last_renewed_at                  DateTime?          @db.Timestamptz(6)
+  fine_paid                        Boolean            @default(false)
+  fine_paid_amount                 Decimal?           @db.Decimal(10, 2)
+  fine_paid_at                     DateTime?          @db.Timestamptz(6)
+  fine_collected_by_user_id        Int?
+  damage_lost_charge_amount        Decimal?           @db.Decimal(10, 2)
+  damage_lost_declared_at          DateTime?          @db.Timestamptz(6)
+  damage_lost_settled              Boolean            @default(false)
+  damage_lost_settled_at           DateTime?          @db.Timestamptz(6)
+  damage_lost_collected_by_user_id Int?
+  replacement_indent_id            Int?               @unique
+  books                            books              @relation(fields: [book_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  purchase_indents                 purchase_indents?  @relation(fields: [replacement_indent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  faculty                          faculty?           @relation(fields: [faculty_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  students                         students?          @relation(fields: [student_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  fine_collected_by                users?             @relation("BorrowRecordFineCollectedBy", fields: [fine_collected_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  damage_lost_collected_by         users?             @relation("BorrowRecordDamageLostCollectedBy", fields: [damage_lost_collected_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([status], map: "idx_book_borrow_status")
 }
@@ -183,11 +196,52 @@ model books {
   qr_code             String                @unique @db.VarChar(100)
   title               String                @db.VarChar(255)
   author              String?               @db.VarChar(255)
+  isbn                String?               @db.VarChar(30)
+  publisher           String?               @db.VarChar(255)
+  edition             String?               @db.VarChar(50)
   category_id         Int
+  department_id       Int?
+  rack_id             Int?
   total_copies        Int                   @default(1)
   available_copies    Int                   @default(1)
+  price_per_copy      Decimal?              @db.Decimal(10, 2)
+  vendor_fund         String?               @db.VarChar(255)
   book_borrow_records book_borrow_records[]
   book_categories     book_categories       @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  departments         departments?          @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  library_racks       library_racks?        @relation(fields: [rack_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model library_racks {
+  id            Int      @id @default(autoincrement())
+  rack_code     String   @unique @db.VarChar(30)
+  shelves       Int      @default(1)
+  subject_range String?  @db.VarChar(255)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  books         books[]
+}
+
+/// Single-row library-wide configuration (borrowing limits, fine rates,
+/// barcode/RFID format, counter hours). No generic settings table exists
+/// elsewhere in this codebase to reuse, and library needs exactly one
+/// config object per install, so this is its own small dedicated model
+/// rather than a key-value store.
+model library_settings {
+  id                       Int      @id @default(autoincrement())
+  books_per_student        Int      @default(3)
+  default_borrowing_days   Int      @default(14)
+  max_renewals             Int      @default(2)
+  renewal_extension_days   Int      @default(14)
+  fine_per_day             Decimal  @default(5) @db.Decimal(10, 2)
+  lost_book_processing_fee Decimal  @default(100) @db.Decimal(10, 2)
+  damaged_book_charge_rate Decimal  @default(0.40) @db.Decimal(4, 2)
+  grace_period_days        Int      @default(1)
+  block_issue_above_fine   Decimal  @default(200) @db.Decimal(10, 2)
+  barcode_format           String?  @db.VarChar(30)
+  spine_label_prefix       String?  @db.VarChar(20)
+  counter_opens_at         String?  @db.VarChar(10)
+  counter_closes_at        String?  @db.VarChar(10)
+  updated_at               DateTime @updatedAt
 }
 
 model bus_live_locations {
@@ -315,6 +369,7 @@ model departments {
   code                     String                     @unique @db.VarChar(20)
   created_at               DateTime                   @default(now()) @db.Timestamptz(6)
   announcements            announcements[]
+  books                    books[]
   classes                  classes[]
   courses                  courses[]
   department_achievements  department_achievements[]
@@ -328,11 +383,20 @@ model departments {
 }
 
 model e_resources {
-  id              Int              @id @default(autoincrement())
-  title           String           @db.VarChar(255)
-  url             String           @db.VarChar(500)
-  category_id     Int?
-  book_categories book_categories? @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                  Int              @id @default(autoincrement())
+  title               String           @db.VarChar(255)
+  url                 String           @db.VarChar(500)
+  category_id         Int?
+  format              String?          @db.VarChar(20)
+  file_size_bytes     Int?
+  pages               Int?
+  license_type        String?          @db.VarChar(50)
+  concurrent_seats    Int?
+  publish_state       String           @default("draft") @db.VarChar(20)
+  uploaded_by_user_id Int?
+  created_at          DateTime         @default(now()) @db.Timestamptz(6)
+  book_categories     book_categories? @relation(fields: [category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users               users?           @relation(fields: [uploaded_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model education_loan_dd {
@@ -923,6 +987,7 @@ model purchase_indents {
   departments              departments                @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users                    users                      @relation(fields: [requested_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   purchase_order_proposals purchase_order_proposals[]
+  book_borrow_records      book_borrow_records?
 
   @@index([department_id, status], map: "idx_purchase_indent_dept_status")
 }
@@ -1436,6 +1501,8 @@ model users {
   announcements                                                                announcements[]
   appraisal_requests_appraisal_requests_hod_reviewed_byTousers                 appraisal_requests[]               @relation("appraisal_requests_hod_reviewed_byTousers")
   appraisal_requests_appraisal_requests_management_approved_byTousers          appraisal_requests[]               @relation("appraisal_requests_management_approved_byTousers")
+  book_borrow_records_fine_collected                                           book_borrow_records[]              @relation("BorrowRecordFineCollectedBy")
+  book_borrow_records_damage_lost_collected                                    book_borrow_records[]              @relation("BorrowRecordDamageLostCollectedBy")
   calendar_events                                                              calendar_events[]
   class_mentors                                                                class_mentors[]
   department_achievements                                                      department_achievements[]
@@ -1786,6 +1853,8 @@ enum borrow_status_enum {
   borrowed
   returned
   overdue
+  lost
+  damaged
 }
 
 enum borrower_type_enum {

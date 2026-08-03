@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import { BorrowRecordsService } from './borrow-records.service';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { LibrarySettingsService } from '../settings/settings.service';
+import { NotificationsService } from '../../notifications/notifications/notifications.service';
 import { BorrowerType } from './dto/create-borrow-record.dto';
 import { BorrowRecordAction } from './dto/update-borrow-record.dto';
 
@@ -41,6 +43,19 @@ describe('BorrowRecordsService', () => {
       count: jest.fn(),
     },
     $transaction: jest.fn(),
+  };
+
+  // Values matching the schema defaults (books_per_student=3,
+  // default_borrowing_days=14, max_renewals=2, renewal_extension_days=14,
+  // fine_per_day=5, lost_book_processing_fee=100,
+  // damaged_book_charge_rate=0.40), re-applied every test in beforeEach
+  // below (jest.resetAllMocks() there wipes any mockResolvedValue set here).
+  const mockLibrarySettingsService = {
+    getRules: jest.fn(),
+  };
+
+  const mockNotificationsService = {
+    create: jest.fn(),
   };
 
   // Runs both the callback form (used inside create/return) and the
@@ -95,6 +110,19 @@ describe('BorrowRecordsService', () => {
   beforeEach(async () => {
     jest.resetAllMocks();
     mockPrismaService.$transaction.mockImplementation(runTransaction);
+    // resetAllMocks() wipes mockResolvedValue too, so this has to be
+    // re-applied every test, same as the $transaction implementation above.
+    mockLibrarySettingsService.getRules.mockResolvedValue({
+      booksPerStudent: 3,
+      defaultBorrowingDays: 14,
+      maxRenewals: 2,
+      renewalExtensionDays: 14,
+      finePerDay: 5,
+      lostBookProcessingFee: 100,
+      damagedBookChargeRate: 0.4,
+      gracePeriodDays: 1,
+      blockIssueAboveFine: 200,
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -102,6 +130,14 @@ describe('BorrowRecordsService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: LibrarySettingsService,
+          useValue: mockLibrarySettingsService,
+        },
+        {
+          provide: NotificationsService,
+          useValue: mockNotificationsService,
         },
       ],
     }).compile();
@@ -939,6 +975,11 @@ describe('BorrowRecordsService', () => {
     });
 
     describe('action: renew', () => {
+      // A fixed date in the future relative to "now" so these fixtures never
+      // go stale and start looking overdue as real time passes (a hardcoded
+      // past-tense literal here previously broke once the calendar caught up).
+      const notYetDueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
       it('should extend due_date by 14 days by default and bump renewal_count', async () => {
         const dueDate = daysFromNow(30);
         const renewedDueDate = new Date(

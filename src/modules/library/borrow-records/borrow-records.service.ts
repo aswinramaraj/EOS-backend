@@ -19,20 +19,12 @@ import {
 } from './dto/search-borrow-records.dto';
 import { GetMyBorrowRecordsDto } from './dto/get-my-borrow-records.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { LibrarySettingsService } from '../settings/settings.service';
+import { NotificationsService } from '../../notifications/notifications/notifications.service';
 import type { Prisma } from '../../../../generated/prisma/client';
 import type { JwtPayload } from '../../../auth/interfaces/jwt-payload.interface';
 
-const RENEWAL_PERIOD_DAYS = 14;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-// The schema has no fine/rate column or renewal-limit column, so both of
-// these are plain business constants applied in code, same spirit as
-// RENEWAL_PERIOD_DAYS above.
-const FINE_PER_DAY_AMOUNT = 5;
-const MAX_RENEWALS = 2;
-// Concurrent-borrow cap — students only. Faculty are staff, not the abuse
-// case this guards against, so they stay uncapped (same reasoning as
-// MAX_RENEWALS/FINE_PER_DAY_AMOUNT: a plain in-code constant, no policy table).
-const MAX_ACTIVE_BORROWS_PER_STUDENT = 3;
 
 function startOfDay(date: Date | string) {
   const d = new Date(date);
@@ -53,6 +45,7 @@ const RECORD_INCLUDE = {
       id: true,
       title: true,
       qr_code: true,
+      price_per_copy: true,
     },
   },
   students: {
@@ -80,7 +73,7 @@ type BorrowRecordWithRelations = Prisma.book_borrow_recordsGetPayload<{
   include: typeof RECORD_INCLUDE;
 }>;
 
-function formatRecord(record: BorrowRecordWithRelations) {
+function formatRecord(record: BorrowRecordWithRelations, finePerDay: number) {
   const isOverdue =
     record.status === 'borrowed' &&
     startOfDay(record.due_date) < startOfDay(new Date());
@@ -133,21 +126,43 @@ function formatRecord(record: BorrowRecordWithRelations) {
     days_overdue: daysOverdue,
     returned_late: !!returnedLate,
     days_late: daysLate,
-    // Computed, not persisted — schema has no fine column. FINE_PER_DAY_AMOUNT
-    // is a placeholder business rate; days_overdue applies while still
-    // borrowed (accruing), days_late applies once returned (final amount owed).
-    fine_amount: (isOverdue ? daysOverdue : daysLate) * FINE_PER_DAY_AMOUNT,
+    // Live/current amount owed — recomputed on every read from
+    // days_overdue/days_late, NOT the persisted fine_paid_amount below.
+    // days_overdue applies while still borrowed (accruing), days_late once
+    // returned (final amount owed). Once fine_paid is true this stops
+    // mattering for collection purposes but still reflects what the running
+    // total would be, same as before this fine-collection feature existed.
+    fine_amount: (isOverdue ? daysOverdue : daysLate) * finePerDay,
+    fine_paid: record.fine_paid,
+    fine_paid_amount:
+      record.fine_paid_amount !== null ? Number(record.fine_paid_amount) : null,
+    fine_paid_at: record.fine_paid_at,
+    is_lost: record.status === 'lost',
+    is_damaged: record.status === 'damaged',
+    damage_lost_charge_amount:
+      record.damage_lost_charge_amount !== null
+        ? Number(record.damage_lost_charge_amount)
+        : null,
+    damage_lost_declared_at: record.damage_lost_declared_at,
+    damage_lost_settled: record.damage_lost_settled,
+    damage_lost_settled_at: record.damage_lost_settled_at,
   };
 }
 
 @Injectable()
 export class BorrowRecordsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly librarySettings: LibrarySettingsService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async create(dto: CreateBorrowRecordDto, currentUser: JwtPayload) {
     if (!currentUser) {
       throw new ForbiddenException('No authenticated user found.');
     }
+
+    const rules = await this.librarySettings.getRules();
 
     return this.prisma.$transaction(async (tx) => {
       // Check book
@@ -275,9 +290,9 @@ export class BorrowRecordsService {
 
       // Concurrent-borrow cap — students only (faculty are uncapped). A real
       // library limits how many books a member can hold at once.
-      if (studentId && activeBorrows.length >= MAX_ACTIVE_BORROWS_PER_STUDENT) {
+      if (studentId && activeBorrows.length >= rules.booksPerStudent) {
         throw new ConflictException(
-          `Students may not have more than ${MAX_ACTIVE_BORROWS_PER_STUDENT} books borrowed at once.`,
+          `Students may not have more than ${rules.booksPerStudent} books borrowed at once.`,
         );
       }
 
@@ -313,7 +328,7 @@ export class BorrowRecordsService {
         include: RECORD_INCLUDE,
       });
 
-      return formatRecord(borrow);
+      return formatRecord(borrow, rules.finePerDay);
     });
   }
 
@@ -394,6 +409,8 @@ export class BorrowRecordsService {
       book_id,
       status,
       overdue = false,
+      fine_paid,
+      damage_lost_settled,
       page = 1,
       page_size = 20,
     } = searchDto;
@@ -433,6 +450,14 @@ export class BorrowRecordsService {
       };
     }
 
+    if (fine_paid !== undefined) {
+      where.fine_paid = fine_paid;
+    }
+
+    if (damage_lost_settled !== undefined) {
+      where.damage_lost_settled = damage_lost_settled;
+    }
+
     // A student/faculty caller can only ever see their own borrowing
     // history — any student_id/faculty_id filter they passed is overridden,
     // not rejected, since narrowing to "yourself" isn't an error, just the
@@ -445,27 +470,30 @@ export class BorrowRecordsService {
       where.faculty_id = (await this.resolveOwnFacultyId(currentUser.sub)) ?? -1;
     }
 
-    const [records, total] = await this.prisma.$transaction([
-      this.prisma.book_borrow_records.findMany({
-        where,
-        include: RECORD_INCLUDE,
-        orderBy: {
-          borrowed_date: 'desc',
-        },
-        skip: (page - 1) * page_size,
-        take: page_size,
-      }),
+    const [rules, [records, total]] = await Promise.all([
+      this.librarySettings.getRules(),
+      this.prisma.$transaction([
+        this.prisma.book_borrow_records.findMany({
+          where,
+          include: RECORD_INCLUDE,
+          orderBy: {
+            borrowed_date: 'desc',
+          },
+          skip: (page - 1) * page_size,
+          take: page_size,
+        }),
 
-      this.prisma.book_borrow_records.count({
-        where,
-      }),
+        this.prisma.book_borrow_records.count({
+          where,
+        }),
+      ]),
     ]);
 
     return {
       page,
       page_size,
       total,
-      data: records.map(formatRecord),
+      data: records.map((r) => formatRecord(r, rules.finePerDay)),
     };
   }
 
@@ -496,7 +524,8 @@ export class BorrowRecordsService {
       }
     }
 
-    return formatRecord(record);
+    const rules = await this.librarySettings.getRules();
+    return formatRecord(record, rules.finePerDay);
   }
 
   async update(id: number, dto: UpdateBorrowRecordDto) {
@@ -510,9 +539,17 @@ export class BorrowRecordsService {
       throw new NotFoundException('Borrow record not found.');
     }
 
-    if (record.status === 'returned') {
-      throw new ConflictException('This book has already been returned.');
+    // 'returned'/'lost'/'damaged' are all terminal — none of the four
+    // actions below apply once a record has left the active 'borrowed'
+    // state (previously this only checked 'returned', back when it was the
+    // only other status that existed).
+    if (record.status !== 'borrowed') {
+      throw new ConflictException(
+        'Only an active (borrowed) record can be returned, renewed, or declared lost/damaged.',
+      );
     }
+
+    const rules = await this.librarySettings.getRules();
 
     if (dto.action === BorrowRecordAction.return) {
       const returnedDate = dto.return_date
@@ -563,53 +600,185 @@ export class BorrowRecordsService {
           include: RECORD_INCLUDE,
         });
 
-        return formatRecord(updated);
+        return formatRecord(updated, rules.finePerDay);
       });
     }
 
-    // Renew
-    const isCurrentlyOverdue =
-      startOfDay(record.due_date) < startOfDay(new Date());
+    if (dto.action === BorrowRecordAction.renew) {
+      const isCurrentlyOverdue =
+        startOfDay(record.due_date) < startOfDay(new Date());
 
-    if (isCurrentlyOverdue) {
-      throw new ConflictException(
-        'Cannot renew an overdue book. Please return it and issue a new borrow record instead.',
-      );
-    }
-
-    if (record.renewal_count >= MAX_RENEWALS) {
-      throw new ConflictException(
-        `Maximum renewal limit (${MAX_RENEWALS}) reached for this borrow record.`,
-      );
-    }
-
-    const newDueDate = dto.new_due_date
-      ? new Date(dto.new_due_date)
-      : new Date(
-          record.due_date.getTime() + RENEWAL_PERIOD_DAYS * 24 * 60 * 60 * 1000,
+      if (isCurrentlyOverdue) {
+        throw new ConflictException(
+          'Cannot renew an overdue book. Please return it and issue a new borrow record instead.',
         );
+      }
 
-    if (newDueDate <= record.due_date) {
-      throw new BadRequestException(
-        'New due date must be after the current due date.',
-      );
+      if (record.renewal_count >= rules.maxRenewals) {
+        throw new ConflictException(
+          `Maximum renewal limit (${rules.maxRenewals}) reached for this borrow record.`,
+        );
+      }
+
+      const newDueDate = dto.new_due_date
+        ? new Date(dto.new_due_date)
+        : new Date(
+            record.due_date.getTime() +
+              rules.renewalExtensionDays * 24 * 60 * 60 * 1000,
+          );
+
+      if (newDueDate <= record.due_date) {
+        throw new BadRequestException(
+          'New due date must be after the current due date.',
+        );
+      }
+
+      const renewed = await this.prisma.book_borrow_records.update({
+        where: {
+          id,
+        },
+        data: {
+          due_date: newDueDate,
+          renewal_count: {
+            increment: 1,
+          },
+          last_renewed_at: new Date(),
+        },
+        include: RECORD_INCLUDE,
+      });
+
+      return formatRecord(renewed, rules.finePerDay);
     }
 
-    const renewed = await this.prisma.book_borrow_records.update({
-      where: {
-        id,
-      },
-      data: {
-        due_date: newDueDate,
-        renewal_count: {
-          increment: 1,
+    // Declare damaged or lost. Unlike return, the copy never comes back to
+    // the shelf, so we permanently withdraw it (total_copies -1) instead of
+    // returning it to circulation (available_copies +1) — available_copies
+    // correctly stays down from when this record was created; nothing here
+    // needs to touch it.
+    return this.prisma.$transaction(async (tx) => {
+      const book = await tx.books.findUniqueOrThrow({
+        where: { id: record.book_id },
+      });
+      const bookCost = book.price_per_copy ? Number(book.price_per_copy) : 0;
+
+      let chargeAmount: number;
+      if (dto.action === BorrowRecordAction.damaged) {
+        chargeAmount = bookCost * rules.damagedBookChargeRate;
+      } else {
+        // Lost: replacement cost + processing fee + whatever overdue fine
+        // had already accrued on this copy at the moment it's declared lost.
+        const isOverdue = startOfDay(record.due_date) < startOfDay(new Date());
+        const accruedFine = isOverdue
+          ? daysBetween(new Date(), record.due_date) * rules.finePerDay
+          : 0;
+        chargeAmount = bookCost + rules.lostBookProcessingFee + accruedFine;
+      }
+
+      const result = await tx.book_borrow_records.updateMany({
+        where: { id, status: 'borrowed' },
+        data: {
+          status: dto.action === BorrowRecordAction.damaged ? 'damaged' : 'lost',
+          damage_lost_charge_amount: chargeAmount,
+          damage_lost_declared_at: new Date(),
         },
-        last_renewed_at: new Date(),
+      });
+
+      if (result.count === 0) {
+        throw new ConflictException(
+          'Only an active (borrowed) record can be declared lost/damaged.',
+        );
+      }
+
+      await tx.books.update({
+        where: { id: record.book_id },
+        data: { total_copies: { decrement: 1 } },
+      });
+
+      const updated = await tx.book_borrow_records.findUniqueOrThrow({
+        where: { id },
+        include: RECORD_INCLUDE,
+      });
+
+      return formatRecord(updated, rules.finePerDay);
+    });
+  }
+
+  /**
+   * PATCH /library/borrow-records/:id/collect-fine — records that the
+   * current overdue/late-return fine has been paid at the counter. No
+   * waive counterpart exists: a fine is either uncollected or collected.
+   */
+  async collectFine(id: number, currentUser: JwtPayload) {
+    const record = await this.prisma.book_borrow_records.findUnique({
+      where: { id },
+      include: RECORD_INCLUDE,
+    });
+
+    if (!record) {
+      throw new NotFoundException('Borrow record not found.');
+    }
+
+    if (record.fine_paid) {
+      throw new ConflictException('This fine has already been collected.');
+    }
+
+    const rules = await this.librarySettings.getRules();
+    const formatted = formatRecord(record, rules.finePerDay);
+    if (formatted.fine_amount <= 0) {
+      throw new BadRequestException('There is no outstanding fine to collect.');
+    }
+
+    const updated = await this.prisma.book_borrow_records.update({
+      where: { id },
+      data: {
+        fine_paid: true,
+        fine_paid_amount: formatted.fine_amount,
+        fine_paid_at: new Date(),
+        fine_collected_by_user_id: currentUser.sub,
       },
       include: RECORD_INCLUDE,
     });
 
-    return formatRecord(renewed);
+    return formatRecord(updated, rules.finePerDay);
+  }
+
+  /**
+   * PATCH /library/borrow-records/:id/settle-charge — records that a
+   * lost/damaged copy's charge has been paid at the counter.
+   */
+  async settleDamageLostCharge(id: number, currentUser: JwtPayload) {
+    const record = await this.prisma.book_borrow_records.findUnique({
+      where: { id },
+      include: RECORD_INCLUDE,
+    });
+
+    if (!record) {
+      throw new NotFoundException('Borrow record not found.');
+    }
+
+    if (record.status !== 'lost' && record.status !== 'damaged') {
+      throw new ConflictException(
+        'Only a record declared lost or damaged has a charge to settle.',
+      );
+    }
+
+    if (record.damage_lost_settled) {
+      throw new ConflictException('This charge has already been settled.');
+    }
+
+    const rules = await this.librarySettings.getRules();
+
+    const updated = await this.prisma.book_borrow_records.update({
+      where: { id },
+      data: {
+        damage_lost_settled: true,
+        damage_lost_settled_at: new Date(),
+        damage_lost_collected_by_user_id: currentUser.sub,
+      },
+      include: RECORD_INCLUDE,
+    });
+
+    return formatRecord(updated, rules.finePerDay);
   }
 
   async remove(id: number) {
@@ -623,17 +792,17 @@ export class BorrowRecordsService {
       throw new NotFoundException('Borrow record not found.');
     }
 
-    // A returned record is permanent borrowing history, not a live/active
-    // state — the books module already refuses to delete a book that has
-    // *any* borrow_records row (P2003, "existing borrow history"), so
-    // letting this endpoint freely delete a returned row would erase
+    // A returned/lost/damaged record is permanent borrowing history, not a
+    // live/active state — the books module already refuses to delete a book
+    // that has *any* borrow_records row (P2003, "existing borrow history"),
+    // so letting this endpoint freely delete one of these would erase
     // exactly the audit trail that guard exists to protect. An active
     // 'borrowed' record hasn't become history yet (no successful loan was
     // ever completed), so it can still be deleted to undo a mistaken issue,
     // same as before.
     if (record.status !== 'borrowed') {
       throw new ConflictException(
-        'Cannot delete a returned borrow record — it is part of the permanent borrowing history.',
+        'Cannot delete a returned, lost, or damaged borrow record — it is part of the permanent borrowing history.',
       );
     }
 
@@ -657,6 +826,98 @@ export class BorrowRecordsService {
 
     return {
       message: 'Borrow record deleted successfully.',
+    };
+  }
+
+  /**
+   * POST /library/borrow-records/send-overdue-reminders — creates an
+   * in-app notification (via the notifications table) for every borrower
+   * currently overdue. This only persists a row for a future
+   * `GET /notifications` inbox to read — there's no real-time/email/SMS
+   * delivery yet, since none of that infrastructure exists in this
+   * codebase (see NotificationsService's own doc comment).
+   */
+  async sendOverdueReminders() {
+    const overdueRecords = await this.prisma.book_borrow_records.findMany({
+      where: { status: 'borrowed', due_date: { lt: new Date() } },
+      include: {
+        books: { select: { title: true } },
+        students: { select: { user_id: true } },
+        faculty: { select: { user_id: true } },
+      },
+    });
+
+    let sent = 0;
+    for (const record of overdueRecords) {
+      const userId = record.students?.user_id ?? record.faculty?.user_id;
+      if (!userId) continue;
+
+      await this.notifications.create({
+        user_id: userId,
+        title: 'Overdue library book',
+        message: `"${record.books.title}" was due on ${record.due_date.toISOString().slice(0, 10)}. Please return it to avoid further fines.`,
+      });
+      sent++;
+    }
+
+    return {
+      message: `Sent ${sent} overdue reminder(s).`,
+      sent,
+      checked: overdueRecords.length,
+    };
+  }
+
+  /**
+   * PATCH /library/borrow-records/:id/create-replacement-indent — raises a
+   * procurement purchase indent for a lost/damaged copy, and links it back
+   * via replacement_indent_id so this doesn't get raised twice.
+   */
+  async createReplacementIndent(id: number, currentUser: JwtPayload) {
+    const record = await this.prisma.book_borrow_records.findUnique({
+      where: { id },
+      include: { books: true },
+    });
+
+    if (!record) {
+      throw new NotFoundException('Borrow record not found.');
+    }
+
+    if (record.status !== 'lost' && record.status !== 'damaged') {
+      throw new ConflictException(
+        'Only a record declared lost or damaged needs a replacement.',
+      );
+    }
+
+    if (record.replacement_indent_id) {
+      throw new ConflictException(
+        'A replacement indent has already been raised for this record.',
+      );
+    }
+
+    if (!record.books.department_id) {
+      throw new BadRequestException(
+        'This book has no department set — set one on the book before requesting a replacement.',
+      );
+    }
+
+    const indent = await this.prisma.purchase_indents.create({
+      data: {
+        requested_by_user_id: currentUser.sub,
+        department_id: record.books.department_id,
+        item_name: `Replacement: ${record.books.title}`,
+        quantity: 1,
+        purpose: `Replacement for ${record.status} copy — borrow record #${record.id}, accession ${record.books.qr_code}`,
+      },
+    });
+
+    await this.prisma.book_borrow_records.update({
+      where: { id },
+      data: { replacement_indent_id: indent.id },
+    });
+
+    return {
+      message: 'Replacement purchase indent created.',
+      purchase_indent_id: indent.id,
     };
   }
 }

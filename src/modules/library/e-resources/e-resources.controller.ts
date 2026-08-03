@@ -17,6 +17,8 @@ import { UpdateEResourceDto } from './dto/update-e-resource.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import type { JwtPayload } from 'src/auth/interfaces/jwt-payload.interface';
 import { FuzzySearchDto } from 'src/common';
 
 @Controller('library/e-resources')
@@ -45,8 +47,8 @@ export class EResourcesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('library', 'admin')
   @Post()
-  create(@Body() dto: CreateEResourceDto) {
-    return this.eResourcesService.create(dto);
+  create(@Body() dto: CreateEResourceDto, @CurrentUser() user: JwtPayload) {
+    return this.eResourcesService.create(dto, user.sub);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
