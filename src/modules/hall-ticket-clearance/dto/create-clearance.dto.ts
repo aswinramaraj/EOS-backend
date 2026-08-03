@@ -5,6 +5,7 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
+import { clearance_type_enum } from '../../../../generated/prisma/enums';
 
 /**
  * POST /hall-ticket-clearance (Student only).
@@ -18,8 +19,8 @@ export class CreateClearanceDto {
   @IsInt()
   exam_id: number;
 
-  @IsEnum(['FEE_EXCEPTION', 'DOCUMENT_PENDING', 'OTHER'])
-  clearance_type: 'FEE_EXCEPTION' | 'DOCUMENT_PENDING' | 'OTHER';
+  @IsEnum(clearance_type_enum)
+  clearance_type: clearance_type_enum;
 
   @IsOptional()
   @IsString()
