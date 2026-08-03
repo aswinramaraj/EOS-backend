@@ -1506,7 +1506,6 @@ model users {
   calendar_events                                                              calendar_events[]
   class_mentors                                                                class_mentors[]
   department_achievements                                                      department_achievements[]
-  e_resources                                                                  e_resources[]
   education_loan_dd                                                            education_loan_dd[]
   exams                                                                        exams[]
   expenses                                                                     expenses[]
@@ -1694,30 +1693,6 @@ model project_teams {
   @@index([status], map: "idx_project_teams_status")
 }
 
-model achievement_comments {
-  id                      Int                     @id @default(autoincrement())
-  achievement_id          Int
-  commented_by_user_id    Int
-  comment_text            String
-  created_at              DateTime                @default(now()) @db.Timestamptz(6)
-  department_achievements department_achievements @relation(fields: [achievement_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  users                   users                   @relation(fields: [commented_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@index([achievement_id, created_at], map: "idx_achievement_comments_achievement")
-}
-
-model achievement_media {
-  id                      Int                         @id @default(autoincrement())
-  achievement_id          Int
-  media_type              achievement_media_type_enum
-  media_url               String                      @db.VarChar(500)
-  thumbnail_url           String?                     @db.VarChar(500)
-  sequence_no             Int                         @default(1) @db.SmallInt
-  department_achievements department_achievements     @relation(fields: [achievement_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@unique([achievement_id, sequence_no])
-}
-
 model alumni_announcements {
   id                Int      @id @default(autoincrement())
   posted_by_user_id Int
@@ -1766,20 +1741,6 @@ model alumni_members {
   students              students                  @relation(fields: [student_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
-model department_achievements {
-  id                   Int                    @id @default(autoincrement())
-  department_id        Int
-  posted_by_user_id    Int
-  title                String                 @db.VarChar(200)
-  description          String?
-  achievement_date     DateTime?              @db.Date
-  created_at           DateTime               @default(now()) @db.Timestamptz(6)
-  achievement_comments achievement_comments[]
-  achievement_media    achievement_media[]
-  departments          departments            @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users                users                  @relation(fields: [posted_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-}
-
 model student_wallets {
   id                  Int                   @id @default(autoincrement())
   student_id          Int                   @unique
@@ -1818,6 +1779,44 @@ model wallet_transactions {
 
   @@index([outlet_id, created_at], map: "idx_wallet_txn_outlet")
   @@index([wallet_id, created_at], map: "idx_wallet_txn_wallet")
+}
+
+model achievement_comments {
+  id                      Int                     @id @default(autoincrement())
+  achievement_id          Int
+  commented_by_user_id    Int
+  comment_text            String
+  created_at              DateTime                @default(now()) @db.Timestamptz(6)
+  department_achievements department_achievements @relation(fields: [achievement_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users                   users                   @relation(fields: [commented_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([achievement_id, created_at], map: "idx_achievement_comments_achievement")
+}
+
+model achievement_media {
+  id                      Int                         @id @default(autoincrement())
+  achievement_id          Int
+  media_type              achievement_media_type_enum
+  media_url               String                      @db.VarChar(500)
+  thumbnail_url           String?                     @db.VarChar(500)
+  sequence_no             Int                         @default(1) @db.SmallInt
+  department_achievements department_achievements     @relation(fields: [achievement_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([achievement_id, sequence_no])
+}
+
+model department_achievements {
+  id                   Int                    @id @default(autoincrement())
+  department_id        Int
+  posted_by_user_id    Int
+  title                String                 @db.VarChar(200)
+  description          String?
+  achievement_date     DateTime?              @db.Date
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  achievement_comments achievement_comments[]
+  achievement_media    achievement_media[]
+  departments          departments            @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                users                  @relation(fields: [posted_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 enum address_type_enum {
@@ -2035,11 +2034,6 @@ enum feedback_rating_label_enum {
   need_improvement
 }
 
-enum achievement_media_type_enum {
-  photo
-  video
-}
-
 enum alumni_member_status_enum {
   active
   inactive
@@ -2067,4 +2061,9 @@ enum wallet_txn_status_enum {
 enum wallet_txn_type_enum {
   credit
   debit
+}
+
+enum achievement_media_type_enum {
+  photo
+  video
 }
