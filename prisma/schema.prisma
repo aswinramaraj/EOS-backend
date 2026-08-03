@@ -124,6 +124,7 @@ model batches {
   start_year         Int                  @db.SmallInt
   end_year           Int                  @db.SmallInt
   academic_calendars academic_calendars[]
+  alumni_batches     alumni_batches?
   announcements      announcements[]
   classes            classes[]
   exams              exams[]
@@ -316,6 +317,7 @@ model departments {
   announcements            announcements[]
   classes                  classes[]
   courses                  courses[]
+  department_achievements  department_achievements[]
   faculty                  faculty[]
   non_teaching_staff       non_teaching_staff[]
   od_request_hod_approvals od_request_hod_approvals[]
@@ -1313,6 +1315,7 @@ model students {
   knew_institution_by                                               String?                            @db.VarChar(100)
   nominee                                                           String?                            @db.VarChar(150)
   created_at                                                        DateTime                           @default(now()) @db.Timestamptz(6)
+  alumni_members                                                    alumni_members?
   attendance_records                                                attendance_records[]
   bonafide_requests                                                 bonafide_requests[]
   book_borrow_records                                               book_borrow_records[]
@@ -1348,6 +1351,7 @@ model students {
   student_projects                                                  student_projects[]
   student_sensitive_info                                            student_sensitive_info?
   student_transport_mapping                                         student_transport_mapping?
+  student_wallets                                                   student_wallets?
   batches                                                           batches                            @relation(fields: [batch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   classes                                                           classes?                           @relation(fields: [class_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   courses                                                           courses                            @relation(fields: [course_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1427,11 +1431,14 @@ model users {
   created_at                                                                   DateTime                           @default(now()) @db.Timestamptz(6)
   updated_at                                                                   DateTime                           @default(now()) @db.Timestamptz(6)
   academic_calendars                                                           academic_calendars[]
+  achievement_comments                                                         achievement_comments[]
+  alumni_announcements                                                         alumni_announcements[]
   announcements                                                                announcements[]
   appraisal_requests_appraisal_requests_hod_reviewed_byTousers                 appraisal_requests[]               @relation("appraisal_requests_hod_reviewed_byTousers")
   appraisal_requests_appraisal_requests_management_approved_byTousers          appraisal_requests[]               @relation("appraisal_requests_management_approved_byTousers")
   calendar_events                                                              calendar_events[]
   class_mentors                                                                class_mentors[]
+  department_achievements                                                      department_achievements[]
   education_loan_dd                                                            education_loan_dd[]
   exams                                                                        exams[]
   expenses                                                                     expenses[]
@@ -1466,6 +1473,7 @@ model users {
   venue_bookings_venue_bookings_booked_by_user_idTousers                       venue_bookings[]                   @relation("venue_bookings_booked_by_user_idTousers")
   venue_bookings_venue_bookings_reviewed_by_user_idTousers                     venue_bookings[]                   @relation("venue_bookings_reviewed_by_user_idTousers")
   visitor_logs                                                                 visitor_logs[]
+  wallet_transactions                                                          wallet_transactions[]
 }
 
 model vendor_quotations {
@@ -1618,6 +1626,132 @@ model project_teams {
   @@index([status], map: "idx_project_teams_status")
 }
 
+model alumni_announcements {
+  id                Int      @id @default(autoincrement())
+  posted_by_user_id Int
+  title             String   @db.VarChar(150)
+  content           String
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  users             users    @relation(fields: [posted_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model alumni_batches {
+  id                    Int                     @id @default(autoincrement())
+  batch_id              Int                     @unique
+  group_name            String                  @db.VarChar(150)
+  graduated_on          DateTime                @default(dbgenerated("CURRENT_DATE")) @db.Date
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  batches               batches                 @relation(fields: [batch_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  alumni_group_messages alumni_group_messages[]
+  alumni_members        alumni_members[]
+}
+
+model alumni_group_messages {
+  id                         Int            @id @default(autoincrement())
+  alumni_batch_id            Int
+  posted_by_alumni_member_id Int
+  content                    String
+  attachment_url             String?        @db.VarChar(500)
+  created_at                 DateTime       @default(now()) @db.Timestamptz(6)
+  alumni_batches             alumni_batches @relation(fields: [alumni_batch_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  alumni_members             alumni_members @relation(fields: [posted_by_alumni_member_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([alumni_batch_id, created_at], map: "idx_alumni_group_messages_batch")
+}
+
+model alumni_members {
+  id                    Int                       @id @default(autoincrement())
+  alumni_batch_id       Int
+  student_id            Int                       @unique
+  personal_email        String?                   @db.Citext
+  personal_phone        String?                   @db.VarChar(20)
+  current_company       String?                   @db.VarChar(200)
+  designation           String?                   @db.VarChar(150)
+  status                alumni_member_status_enum @default(active)
+  joined_at             DateTime                  @default(now()) @db.Timestamptz(6)
+  alumni_group_messages alumni_group_messages[]
+  alumni_batches        alumni_batches            @relation(fields: [alumni_batch_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  students              students                  @relation(fields: [student_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model student_wallets {
+  id                  Int                   @id @default(autoincrement())
+  student_id          Int                   @unique
+  balance             Decimal               @default(0) @db.Decimal(12, 2)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  students            students              @relation(fields: [student_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  wallet_transactions wallet_transactions[]
+}
+
+model wallet_outlets {
+  id                  Int                     @id @default(autoincrement())
+  name                String                  @db.VarChar(150)
+  outlet_type         wallet_outlet_type_enum
+  location            String?                 @db.VarChar(255)
+  wallet_transactions wallet_transactions[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model wallet_transactions {
+  id                   Int                    @id @default(autoincrement())
+  wallet_id            Int
+  txn_type             wallet_txn_type_enum
+  source               wallet_txn_source_enum
+  amount               Decimal                @db.Decimal(12, 2)
+  status               wallet_txn_status_enum @default(pending)
+  processed_by_user_id Int?
+  razorpay_order_id    String?                @unique(map: "idx_wallet_txn_razorpay_order", where: raw("(razorpay_order_id IS NOT NULL)")) @db.VarChar(100)
+  razorpay_payment_id  String?                @db.VarChar(100)
+  razorpay_signature   String?                @db.VarChar(255)
+  remarks              String?                @db.VarChar(255)
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  outlet_id            Int?
+  users                users?                 @relation(fields: [processed_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "wallet_transactions_collected_by_user_id_fkey")
+  wallet_outlets       wallet_outlets?        @relation(fields: [outlet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  student_wallets      student_wallets        @relation(fields: [wallet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([outlet_id, created_at], map: "idx_wallet_txn_outlet")
+  @@index([wallet_id, created_at], map: "idx_wallet_txn_wallet")
+}
+
+model achievement_comments {
+  id                      Int                     @id @default(autoincrement())
+  achievement_id          Int
+  commented_by_user_id    Int
+  comment_text            String
+  created_at              DateTime                @default(now()) @db.Timestamptz(6)
+  department_achievements department_achievements @relation(fields: [achievement_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users                   users                   @relation(fields: [commented_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([achievement_id, created_at], map: "idx_achievement_comments_achievement")
+}
+
+model achievement_media {
+  id                      Int                         @id @default(autoincrement())
+  achievement_id          Int
+  media_type              achievement_media_type_enum
+  media_url               String                      @db.VarChar(500)
+  thumbnail_url           String?                     @db.VarChar(500)
+  sequence_no             Int                         @default(1) @db.SmallInt
+  department_achievements department_achievements     @relation(fields: [achievement_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([achievement_id, sequence_no])
+}
+
+model department_achievements {
+  id                   Int                    @id @default(autoincrement())
+  department_id        Int
+  posted_by_user_id    Int
+  title                String                 @db.VarChar(200)
+  description          String?
+  achievement_date     DateTime?              @db.Date
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  achievement_comments achievement_comments[]
+  achievement_media    achievement_media[]
+  departments          departments            @relation(fields: [department_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                users                  @relation(fields: [posted_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
 enum address_type_enum {
   permanent
   temporary
@@ -1671,9 +1805,9 @@ enum clearance_exception_status_enum {
 }
 
 enum clearance_type_enum {
-  FEE_EXCEPTION
-  DOCUMENT_PENDING
-  OTHER
+  fee_due
+  no_due
+  library_due
 }
 
 enum dayscholar_mode_enum {
@@ -1829,4 +1963,38 @@ enum feedback_rating_label_enum {
   good
   satisfactory
   need_improvement
+}
+
+enum alumni_member_status_enum {
+  active
+  inactive
+}
+
+enum wallet_outlet_type_enum {
+  recharge_counter
+  stationary
+  photocopier
+}
+
+enum wallet_txn_source_enum {
+  cash
+  razorpay
+  adjustment
+  purchase
+}
+
+enum wallet_txn_status_enum {
+  pending
+  success
+  failed
+}
+
+enum wallet_txn_type_enum {
+  credit
+  debit
+}
+
+enum achievement_media_type_enum {
+  photo
+  video
 }
