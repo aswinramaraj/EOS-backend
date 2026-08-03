@@ -3,6 +3,8 @@ import { IsDateString, IsEnum, IsOptional } from 'class-validator';
 export enum BorrowRecordAction {
   return = 'return',
   renew = 'renew',
+  damaged = 'damaged',
+  lost = 'lost',
 }
 
 export class UpdateBorrowRecordDto {

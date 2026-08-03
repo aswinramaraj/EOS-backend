@@ -59,18 +59,19 @@ describe('EResourcesController', () => {
     expect(result).toBe(expected);
   });
 
-  it('create should call service.create with the dto and return its result', async () => {
+  it('create should call service.create with the dto, the caller id, and return its result', async () => {
     const dto = {
       title: 'New Resource',
       url: 'https://example.com',
       category_id: 1,
     };
+    const user = { sub: 1, email: 'library@eos.test', role: 'library', roleId: 8 };
     const expected = { id: 1, ...dto };
     mockEResourcesService.create.mockResolvedValue(expected);
 
-    const result = await controller.create(dto);
+    const result = await controller.create(dto, user);
 
-    expect(mockEResourcesService.create).toHaveBeenCalledWith(dto);
+    expect(mockEResourcesService.create).toHaveBeenCalledWith(dto, user.sub);
     expect(result).toBe(expected);
   });
 

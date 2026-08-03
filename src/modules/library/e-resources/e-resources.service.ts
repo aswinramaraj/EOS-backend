@@ -18,6 +18,13 @@ interface EResourceFuzzySearchRow {
   url: string;
   category_id: number | null;
   category_name: string | null;
+  format: string | null;
+  file_size_bytes: number | null;
+  pages: number | null;
+  license_type: string | null;
+  concurrent_seats: number | null;
+  publish_state: string;
+  created_at: Date;
   similarity: number;
 }
 
@@ -26,6 +33,14 @@ function formatEResource(resource: {
   title: string;
   url: string;
   category_id: number | null;
+  format: string | null;
+  file_size_bytes: number | null;
+  pages: number | null;
+  license_type: string | null;
+  concurrent_seats: number | null;
+  publish_state: string;
+  uploaded_by_user_id: number | null;
+  created_at: Date;
   book_categories: { id: number; name: string } | null;
 }) {
   return {
@@ -34,6 +49,14 @@ function formatEResource(resource: {
     url: resource.url,
     category_id: resource.category_id,
     category_name: resource.book_categories?.name ?? null,
+    format: resource.format,
+    file_size_bytes: resource.file_size_bytes,
+    pages: resource.pages,
+    license_type: resource.license_type,
+    concurrent_seats: resource.concurrent_seats,
+    publish_state: resource.publish_state,
+    uploaded_by_user_id: resource.uploaded_by_user_id,
+    created_at: resource.created_at,
   };
 }
 
@@ -41,7 +64,7 @@ function formatEResource(resource: {
 export class EResourcesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateEResourceDto) {
+  async create(dto: CreateEResourceDto, uploadedByUserId: number) {
     const url = dto.url.trim();
 
     if (dto.category_id) {
@@ -69,6 +92,13 @@ export class EResourcesService {
         title: dto.title,
         url,
         category_id: dto.category_id,
+        format: dto.format,
+        file_size_bytes: dto.file_size_bytes,
+        pages: dto.pages,
+        license_type: dto.license_type,
+        concurrent_seats: dto.concurrent_seats,
+        publish_state: dto.publish_state,
+        uploaded_by_user_id: uploadedByUserId,
       },
       include: {
         book_categories: {
@@ -81,7 +111,8 @@ export class EResourcesService {
   }
 
   async findAll(searchDto: SearchEResourcesDto) {
-    const { q, category_id, page = 1, page_size = 20 } = searchDto;
+    const { q, category_id, format, publish_state, page = 1, page_size = 20 } =
+      searchDto;
 
     const where: Prisma.e_resourcesWhereInput = {};
 
@@ -91,6 +122,14 @@ export class EResourcesService {
 
     if (category_id) {
       where.category_id = category_id;
+    }
+
+    if (format) {
+      where.format = format;
+    }
+
+    if (publish_state) {
+      where.publish_state = publish_state;
     }
 
     const [resources, total] = await this.prisma.$transaction([
@@ -131,6 +170,13 @@ export class EResourcesService {
         er.url,
         er.category_id,
         bc.name AS category_name,
+        er.format,
+        er.file_size_bytes,
+        er.pages,
+        er.license_type,
+        er.concurrent_seats,
+        er.publish_state,
+        er.created_at,
         GREATEST(
           similarity(er.title, ${q}),
           word_similarity(${q}, er.title)
@@ -150,6 +196,13 @@ export class EResourcesService {
       url: row.url,
       category_id: row.category_id,
       category_name: row.category_name,
+      format: row.format,
+      file_size_bytes: row.file_size_bytes,
+      pages: row.pages,
+      license_type: row.license_type,
+      concurrent_seats: row.concurrent_seats,
+      publish_state: row.publish_state,
+      created_at: row.created_at,
       similarity: Number(row.similarity),
     }));
   }

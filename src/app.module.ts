@@ -73,6 +73,12 @@ import { BookCategoriesModule } from './modules/library/book-categories/book-cat
 import { BooksModule } from './modules/library/books/books.module';
 import { BorrowRecordsModule } from './modules/library/borrow-records/borrow-records.module';
 import { EResourcesModule } from './modules/library/e-resources/e-resources.module';
+import { StudentLookupModule } from './modules/library/student-lookup/student-lookup.module';
+import { LibraryDashboardModule } from './modules/library/dashboard/dashboard.module';
+import { MembersModule } from './modules/library/members/members.module';
+import { LibrarySettingsModule } from './modules/library/settings/settings.module';
+import { RacksModule } from './modules/library/racks/racks.module';
+import { LibraryReportsModule } from './modules/library/reports/reports.module';
 
 import { CompaniesModule } from './modules/placement/companies/companies.module';
 import { DrivesModule } from './modules/placement/drives/drives.module';
@@ -169,6 +175,12 @@ import { HallTicketClearanceModule } from './modules/hall-ticket-clearance/hall-
     BooksModule,
     BorrowRecordsModule,
     EResourcesModule,
+    StudentLookupModule,
+    LibraryDashboardModule,
+    MembersModule,
+    LibrarySettingsModule,
+    RacksModule,
+    LibraryReportsModule,
 
     CompaniesModule,
     DrivesModule,

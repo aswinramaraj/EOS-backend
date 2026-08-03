@@ -1,5 +1,6 @@
 import {
   Injectable,
+  BadRequestException,
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
@@ -26,11 +27,68 @@ interface BookFuzzySearchRow {
   qr_code: string;
   title: string;
   author: string | null;
+  isbn: string | null;
+  publisher: string | null;
+  edition: string | null;
   category_id: number;
   category_name: string;
+  department_id: number | null;
+  department_name: string | null;
+  department_code: string | null;
+  rack_id: number | null;
+  rack_code: string | null;
   total_copies: number;
   available_copies: number;
+  price_per_copy: string | null;
+  vendor_fund: string | null;
   similarity: number;
+}
+
+const BOOK_INCLUDE = {
+  book_categories: {
+    select: { id: true, name: true },
+  },
+  departments: {
+    select: { id: true, name: true, code: true },
+  },
+  library_racks: {
+    select: { id: true, rack_code: true, subject_range: true },
+  },
+} satisfies Prisma.booksInclude;
+
+type BookWithRelations = Prisma.booksGetPayload<{ include: typeof BOOK_INCLUDE }>;
+
+function toBookResponse(book: BookWithRelations) {
+  return {
+    id: book.id,
+    qr_code: book.qr_code,
+    title: book.title,
+    author: book.author,
+    isbn: book.isbn,
+    publisher: book.publisher,
+    edition: book.edition,
+    category_id: book.category_id,
+    category_name: book.book_categories.name,
+    department: book.departments
+      ? {
+          id: book.departments.id,
+          name: book.departments.name,
+          code: book.departments.code,
+        }
+      : null,
+    rack: book.library_racks
+      ? {
+          id: book.library_racks.id,
+          rack_code: book.library_racks.rack_code,
+          subject_range: book.library_racks.subject_range,
+        }
+      : null,
+    total_copies: book.total_copies,
+    available_copies: book.available_copies,
+    price_per_copy:
+      book.price_per_copy !== null ? Number(book.price_per_copy) : null,
+    vendor_fund: book.vendor_fund,
+  };
 }
 
 @Injectable()
@@ -38,21 +96,25 @@ export class BooksService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateBookDto) {
-    // Same title + author already catalogued? Add to its copies instead of
-    // creating a duplicate entry for the same book.
+    if (
+      dto.available_copies !== undefined &&
+      dto.available_copies > dto.total_copies
+    ) {
+      throw new BadRequestException(
+        'available_copies cannot exceed total_copies.',
+      );
+    }
+
+    // Same title + author + edition already catalogued? Add to its copies
+    // instead of creating a duplicate entry for the same book — but two
+    // different editions of the same title/author must stay separate rows.
     const existingBook = await this.prisma.books.findFirst({
       where: {
         title: { equals: dto.title, mode: 'insensitive' },
         author: dto.author ? { equals: dto.author, mode: 'insensitive' } : null,
+        edition: dto.edition ? { equals: dto.edition, mode: 'insensitive' } : null,
       },
-      include: {
-        book_categories: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      include: BOOK_INCLUDE,
     });
 
     if (existingBook) {
@@ -65,29 +127,13 @@ export class BooksService {
             increment: dto.total_copies,
           },
           available_copies: {
-            increment: dto.total_copies,
+            increment: dto.available_copies ?? dto.total_copies,
           },
         },
-        include: {
-          book_categories: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
+        include: BOOK_INCLUDE,
       });
 
-      return {
-        id: updated.id,
-        qr_code: updated.qr_code,
-        title: updated.title,
-        author: updated.author,
-        category_id: updated.category_id,
-        category_name: updated.book_categories.name,
-        total_copies: updated.total_copies,
-        available_copies: updated.available_copies,
-      };
+      return toBookResponse(updated);
     }
 
     // Check whether QR code already exists
@@ -112,42 +158,57 @@ export class BooksService {
       throw new NotFoundException('Book category not found.');
     }
 
+    // Check whether department exists (if given)
+    if (dto.department_id) {
+      const department = await this.prisma.departments.findUnique({
+        where: { id: dto.department_id },
+      });
+
+      if (!department) {
+        throw new NotFoundException('Department not found.');
+      }
+    }
+
+    // Check whether rack exists (if given)
+    if (dto.rack_id) {
+      const rack = await this.prisma.library_racks.findUnique({
+        where: { id: dto.rack_id },
+      });
+
+      if (!rack) {
+        throw new NotFoundException('Rack not found.');
+      }
+    }
+
     // Create the book
     const book = await this.prisma.books.create({
       data: {
         qr_code: dto.qr_code,
         title: dto.title,
         author: dto.author,
+        isbn: dto.isbn,
+        publisher: dto.publisher,
+        edition: dto.edition,
         category_id: dto.category_id,
+        department_id: dto.department_id,
+        rack_id: dto.rack_id,
         total_copies: dto.total_copies,
-        available_copies: dto.total_copies,
+        available_copies: dto.available_copies ?? dto.total_copies,
+        price_per_copy: dto.price_per_copy,
+        vendor_fund: dto.vendor_fund,
       },
-      include: {
-        book_categories: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      include: BOOK_INCLUDE,
     });
 
-    return {
-      id: book.id,
-      qr_code: book.qr_code,
-      title: book.title,
-      author: book.author,
-      category_id: book.category_id,
-      category_name: book.book_categories.name,
-      total_copies: book.total_copies,
-      available_copies: book.available_copies,
-    };
+    return toBookResponse(book);
   }
 
   async findAll(searchDto: SearchBooksDto) {
     const {
       q,
       category_id,
+      department_id,
+      rack_id,
       available_only = false,
       page = 1,
       page_size = 20,
@@ -176,6 +237,14 @@ export class BooksService {
       where.category_id = category_id;
     }
 
+    if (department_id) {
+      where.department_id = department_id;
+    }
+
+    if (rack_id) {
+      where.rack_id = rack_id;
+    }
+
     if (available_only) {
       where.available_copies = {
         gt: 0,
@@ -186,14 +255,7 @@ export class BooksService {
       this.prisma.books.findMany({
         where,
 
-        include: {
-          book_categories: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
+        include: BOOK_INCLUDE,
 
         orderBy: {
           title: 'asc',
@@ -214,20 +276,7 @@ export class BooksService {
       page_size,
       total,
 
-      data: books.map((book) => ({
-        id: book.id,
-        qr_code: book.qr_code,
-        title: book.title,
-        author: book.author,
-
-        total_copies: book.total_copies,
-        available_copies: book.available_copies,
-
-        category: {
-          id: book.book_categories.id,
-          name: book.book_categories.name,
-        },
-      })),
+      data: books.map(toBookResponse),
     };
   }
 
@@ -247,10 +296,20 @@ export class BooksService {
         b.qr_code,
         b.title,
         b.author,
+        b.isbn,
+        b.publisher,
+        b.edition,
         b.category_id,
         bc.name AS category_name,
+        b.department_id,
+        d.name AS department_name,
+        d.code AS department_code,
+        b.rack_id,
+        r.rack_code,
         b.total_copies,
         b.available_copies,
+        b.price_per_copy,
+        b.vendor_fund,
         GREATEST(
           similarity(b.title, ${q}),
           word_similarity(${q}, b.title),
@@ -258,6 +317,8 @@ export class BooksService {
         ) AS similarity
       FROM books b
       JOIN book_categories bc ON bc.id = b.category_id
+      LEFT JOIN departments d ON d.id = b.department_id
+      LEFT JOIN library_racks r ON r.id = b.rack_id
       WHERE
         similarity(b.title, ${q}) > ${FUZZY_SIMILARITY_THRESHOLD}
         OR word_similarity(${q}, b.title) > ${FUZZY_SIMILARITY_THRESHOLD}
@@ -271,10 +332,23 @@ export class BooksService {
       qr_code: row.qr_code,
       title: row.title,
       author: row.author,
+      isbn: row.isbn,
+      publisher: row.publisher,
+      edition: row.edition,
       category_id: row.category_id,
       category_name: row.category_name,
+      department: row.department_id
+        ? {
+            id: row.department_id,
+            name: row.department_name,
+            code: row.department_code,
+          }
+        : null,
+      rack: row.rack_id ? { id: row.rack_id, rack_code: row.rack_code } : null,
       total_copies: row.total_copies,
       available_copies: row.available_copies,
+      price_per_copy: row.price_per_copy !== null ? Number(row.price_per_copy) : null,
+      vendor_fund: row.vendor_fund,
       similarity: Number(row.similarity),
     }));
   }
@@ -284,30 +358,14 @@ export class BooksService {
       where: {
         id,
       },
-      include: {
-        book_categories: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      include: BOOK_INCLUDE,
     });
 
     if (!book) {
       throw new NotFoundException('Book not found.');
     }
 
-    return {
-      id: book.id,
-      qr_code: book.qr_code,
-      title: book.title,
-      author: book.author,
-      category_id: book.category_id,
-      category_name: book.book_categories.name,
-      total_copies: book.total_copies,
-      available_copies: book.available_copies,
-    };
+    return toBookResponse(book);
   }
 
   async update(id: number, dto: UpdateBookDto) {
@@ -317,6 +375,16 @@ export class BooksService {
 
     if (!book) {
       throw new NotFoundException('Book not found.');
+    }
+
+    const effectiveTotal = dto.total_copies ?? book.total_copies;
+    if (
+      dto.available_copies !== undefined &&
+      dto.available_copies > effectiveTotal
+    ) {
+      throw new BadRequestException(
+        'available_copies cannot exceed total_copies.',
+      );
     }
 
     // QR validation
@@ -348,29 +416,35 @@ export class BooksService {
       }
     }
 
+    // Department validation
+    if (dto.department_id) {
+      const department = await this.prisma.departments.findUnique({
+        where: { id: dto.department_id },
+      });
+
+      if (!department) {
+        throw new NotFoundException('Department not found.');
+      }
+    }
+
+    // Rack validation
+    if (dto.rack_id) {
+      const rack = await this.prisma.library_racks.findUnique({
+        where: { id: dto.rack_id },
+      });
+
+      if (!rack) {
+        throw new NotFoundException('Rack not found.');
+      }
+    }
+
     const updated = await this.prisma.books.update({
       where: { id },
       data: dto,
-      include: {
-        book_categories: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      include: BOOK_INCLUDE,
     });
 
-    return {
-      id: updated.id,
-      qr_code: updated.qr_code,
-      title: updated.title,
-      author: updated.author,
-      category_id: updated.category_id,
-      category_name: updated.book_categories.name,
-      total_copies: updated.total_copies,
-      available_copies: updated.available_copies,
-    };
+    return toBookResponse(updated);
   }
 
   async remove(id: number) {
